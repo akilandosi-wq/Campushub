@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>CampusHub 3.0</title>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+
+<style>
+
+* {
+box-sizing: border-box;
+}
+
+body {
+font: 16px system-ui;
+margin: 0;
+background: #f2f5fa;
+color: #17243a;
+}
+
+header {
+background: #10233f;
+color: white;
+padding: 20px;
+font-size: 22px;
+font-weight: bold;
+}
+
+main {
+max-width: 950px;
+margin: 25px auto;
+padding: 12px;
+}
+
+.card {
+background: white;
+border-radius: 14px;
+padding: 22px;
+margin: 14px 0;
+box-shadow: 0 4px 18px #0001;
+}
+
+.grid {
+display: grid;
+grid-template-columns: repeat(auto-fit,minmax(260px,1fr));
+gap: 12px;
+}
+
+input, textarea, select {
+width: 100%;
+padding: 11px;
+margin: 8px 0 14px;
+border: 1px solid #ccd5e3;
+border-radius: 8px;
+}
+
+button {
+background: #2563eb;
+color: white;
+border: 0;
+padding: 12px 16px;
+border-radius: 9px;
+cursor: pointer;
+margin: 3px;
+}
+
+button:disabled {
+opacity: .6;
+}
+
+.hidden {
+display: none !important;
+}
+
+.chatbox {
+height: 220px;
+overflow: auto;
+background: #f7f9fc;
+padding: 10px;
+}
+
+.msg {
+padding: 8px;
+background: white;
+margin: 6px;
+border-radius: 8px;
+overflow-wrap: anywhere;
+}
+
+.notice {
+color: #2563eb;
+font-weight: 500;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<header>
+🎓 CampusHub 3.0
+</header>
+
+<main>
+
+<!-- AUTHENTICATION -->
+
+<section id="auth" class="card">
+
+<h2>Student Login / Registration</h2>
+
+<form id="form">
+
+<label>Email</label>
+
+<input
+id="email"
+type="email"
+required
+placeholder="Enter your email"
+>
+
+<label>Password (minimum 6 characters)</label>
+
+<input
+id="password"
+type="password"
+minlength="6"
+required
+placeholder="Enter password"
+>
+
+<div id="extra" class="hidden">
+
+<label>Full Name</label>
+
+<input
+id="name"
+placeholder="Your full name"
+>
+
+<label>Course</label>
+
+<input
+id="course"
+placeholder="Your course"
+>
+
+<label>Year of Study</label>
+
+<select id="year">
+
+<option value="1">Year 1</option>
+<option value="2">Year 2</option>
+<option value="3">Year 3</option>
+<option value="4">Year 4</option>
+
+</select>
+
+</div>
+
+<button id="submit" type="submit">
+Login
+</button>
+
+</form>
+
+<button type="button" onclick="switchMode('signup')">
+Register
+</button>
+
+<button type="button" onclick="switchMode('login')">
+Login
+</button>
+
+<p id="notice" class="notice"></p>
+
+</section>
+
+
+<!-- STUDENT DASHBOARD -->
+
+<section id="dashboard" class="hidden">
+
+<div class="card">
+
+<h2 id="welcome">Student Dashboard</h2>
+
+<button onclick="logout()">
+Log Out
+</button>
+
+</div>
+
+
+<div class="grid">
+
+
+<!-- PROFILE -->
+
+<div class="card">
+
+<h3>👤 My Profile</h3>
+
+<label>Full Name</label>
+
+<input id="pname">
+
+<label>Course</label>
+
+<input id="pcourse">
+
+<label>Year</label>
+
+<select id="pyear">
+
+<option value="1">Year 1</option>
+<option value="2">Year 2</option>
+<option value="3">Year 3</option>
+<option value="4">Year 4</option>
+
+</select>
+
+<button onclick="saveProfile()">
+Save Profile
+</button>
+
+<p id="pn"></p>
+
+</div>
+
+
+<!-- MODULES -->
+
+<div class="card">
+
+<h3>📚 Modules</h3>
+
+<div id="modules">
+Loading modules...
+</div>
+
+</div>
+
+
+<!-- ASSIGNMENTS AND TESTS -->
+
+<div class="card">
+
+<h3>📝 Assignments & Tests</h3>
+
+<div id="work">
+Loading work...
+</div>
+
+</div>
+
+
+<!-- CLASS CHAT -->
+
+<div class="card">
+
+<h3>💬 Class Chat</h3>
+
+<div id="chat" class="chatbox">
+Loading messages...
+</div>
+
+<form id="chatform">
+
+<textarea
+id="message"
+required
+maxlength="1000"
+placeholder="Message classmates"
+></textarea>
+
+<button type="submit">
+Send Message
+</button>
+
+</form>
+
+<p id="cn"></p>
+
+</div>
+
+
+<!-- SOCIAL LINKS -->
+
+<div class="card">
+
+<h3>🌐 Social Links</h3>
+
+<a href="https://wa.me/">WhatsApp</a> ·
+
+<a href="https://telegram.org/">Telegram</a> ·
+
+<a href="https://x.com/">X</a> ·
+
+<a href="https://instagram.com/">Instagram</a> ·
+
+<a href="https://youtube.com/">YouTube</a> ·
+
+<a href="https://discord.com/">Discor
