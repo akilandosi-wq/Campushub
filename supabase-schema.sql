@@ -146,3 +146,47 @@ using (bucket_id = 'campushub-notes' and (
     where n.collection_name = 'notes' and n.data->>'storagePath' = name
     and n.data->>'teacherId' = auth.uid()::text)
 ));
+
+
+-- Create student profiles automatically at Auth signup.
+-- This runs inside Postgres, so profiles are created even when email
+-- confirmation means the browser has no authenticated session yet.
+create or replace function public.campushub_create_student_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  meta jsonb := coalesce(new.raw_user_meta_data, '{}'::jsonb);
+begin
+  if nullif(trim(meta->>'fullName'), '') is not null
+     and nullif(trim(meta->>'regNo'), '') is not null
+     and nullif(trim(meta->>'course'), '') is not null
+     and nullif(trim(meta->>'year'), '') is not null then
+    insert into public.campushub_documents (collection_name, id, data)
+    values (
+      'students',
+      new.id::text,
+      jsonb_build_object(
+        'fullName', trim(meta->>'fullName'),
+        'phone', coalesce(meta->>'phone', ''),
+        'regNo', trim(meta->>'regNo'),
+        'course', trim(meta->>'course'),
+        'year', trim(meta->>'year'),
+        'gender', coalesce(meta->>'gender', ''),
+        'email', coalesce(new.email, ''),
+        'role', 'student',
+        'createdAt', now()
+      )
+    )
+    on conflict (collection_name, id) do nothing;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists campushub_create_student_profile on auth.users;
+create trigger campushub_create_student_profile
+after insert on auth.users
+for each row execute function public.campushub_create_student_profile();
