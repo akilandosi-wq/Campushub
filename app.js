@@ -313,6 +313,7 @@ document.addEventListener("click", async e => {
       if (!confirm("Disconnect " + s.n + "?")) return (b.disabled = false);
       if (s.p && me.providerData.some(p => p.providerId === s.p)) await me.unlink(s.p);
       await db.collection("students").doc(me.uid).update({ ["social." + k]: firebase.firestore.FieldValue.delete() });
+      await db.collection("publicProfiles").doc(me.uid).update({ ["social." + k]: firebase.firestore.FieldValue.delete() });
       if (profile.social) delete profile.social[k];
       toast("Disconnected."); route();
     }
