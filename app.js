@@ -51,8 +51,10 @@ $("authForm").addEventListener("submit", async e => {
       if (!p.fullName || !p.phone || !p.regNo || !p.course || !p.year) throw { message: "Fill in all registration details." };
       signingUp = true;
       const r = await auth.createUserWithEmailAndPassword(email, password);
-      await db.collection("students").doc(r.user.uid).set({ ...p, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
-      await db.collection("publicProfiles").doc(r.user.uid).set(publicProfileData(p));
+      const batch = db.batch();
+      batch.set(db.collection("students").doc(r.user.uid), { ...p, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      batch.set(db.collection("publicProfiles").doc(r.user.uid), publicProfileData(p));
+      await batch.commit();
       me = r.user; profile = p; authMsg(""); enter();
     } else await auth.signInWithEmailAndPassword(email, password);
   } catch (err) { authMsg(friendly(err)); }
@@ -67,7 +69,8 @@ auth.onAuthStateChanged(async u => {
     const d = await db.collection("students").doc(u.uid).get();
     if (!d.exists) { authMsg("Profile not found. Contact your administrator."); await auth.signOut(); return; }
     profile = d.data();
-    await db.collection("publicProfiles").doc(u.uid).set(publicProfileData(profile), { merge: true });
+    // Avoid a Firestore write on every sign-in. Public profile sync is handled
+    // during registration and by the administrator's one-time migration tool.
     enter();
   } catch (err) { authMsg(friendly(err)); $("authScreen").classList.remove("hidden"); }
 });
@@ -78,6 +81,10 @@ function enter() {
   $("topName").textContent = profile.fullName;
   $("avatar").textContent = (profile.fullName || "S").charAt(0).toUpperCase();
   $("staffLink").classList.toggle("hidden", !isStaff());
+  $("staffLink").href = profile.role === "admin" ? "admin.html" : "teacher.html";
+  $("staffLink").querySelector("span").textContent = profile.role === "admin" ? "Admin portal" : "Teacher portal";
+  $("roleLabel").textContent = isStaff() ? (profile.role === "admin" ? "Administrator" : "Teacher") : "Student";
+  document.querySelectorAll("[data-student-only]").forEach(el => el.classList.toggle("hidden", isStaff()));
   if (!location.hash) history.replaceState(null, "", "#/home");
   route();
   if (!redirectChecked) {
@@ -96,7 +103,10 @@ function route() {
   if (unsub) { unsub(); unsub = null; }
   navTok++;
   const [page = "home", ...arg] = location.hash.replace(/^#\/?/, "").split("/");
-  if (isStaff() && ["home", "modules", "work"].includes(page)) return location.replace("admin.html#/" + (page === "home" ? "dashboard" : page));
+  if (isStaff() && ["home", "modules", "work"].includes(page)) {
+    const portal = profile.role === "admin" ? "admin.html" : "teacher.html";
+    return location.replace(portal + "#/" + (page === "home" ? "dashboard" : page));
+  }
   const titles = { home: "Home", modules: "Modules", work: "Assignments & Tests", chat: "Chat", profile: "My Profile", student: "Student profile" };
   $("pageTitle").textContent = titles[page] || "Overview";
   document.querySelectorAll(".side-link[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
