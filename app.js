@@ -51,6 +51,10 @@ $("authForm").addEventListener("submit", async e => {
       if (!p.fullName || !p.phone || !p.regNo || !p.course || !p.year) throw { message: "Fill in all registration details." };
       signingUp = true;
       const r = await auth.createUserWithEmailAndPassword(email, password, p);
+      if (!r.session) {
+        authMsg("Account created. Check your email to confirm it, then sign in.", false);
+        return;
+      }
       await db.collection("students").doc(r.user.uid).set({ ...p, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
       me = r.user; profile = p; authMsg(""); enter();
       // Create the directory-safe profile in the background. Firestore rules
