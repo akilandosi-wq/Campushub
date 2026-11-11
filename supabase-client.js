@@ -15,7 +15,7 @@ const auth = {
       email, role: "student"
     } } });
     if (error) throw error;
-    return { user: wrapUser(data.user) };
+    return { user: wrapUser(data.user), session: !!data.session };
   },
   signInWithEmailAndPassword: async (email, password) => {
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
