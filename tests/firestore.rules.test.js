@@ -123,6 +123,30 @@ describe("CampusHub Firestore security rules", function () {
     await assertFails(getDoc(doc(db, "chatRooms/alice_bob/messages/message1")));
   });
 
+  it("allows a student to read their own course room", async () => {
+    await seed("chatRooms/course_computer_engineering", {
+      type: "course", course: "Computer Engineering"
+    });
+    await seed("chatRooms/course_computer_engineering/messages/message1", {
+      senderId: "bob", senderName: "Bob Student",
+      message: "Course update", createdAt: new Date()
+    });
+    const db = testEnv.authenticatedContext("alice").firestore();
+    await assertSucceeds(getDoc(doc(db, "chatRooms/course_computer_engineering/messages/message1")));
+  });
+
+  it("blocks a student from reading another course room", async () => {
+    await seed("chatRooms/course_electrical", {
+      type: "course", course: "Electrical Engineering"
+    });
+    await seed("chatRooms/course_electrical/messages/message1", {
+      senderId: "bob", senderName: "Bob Student",
+      message: "Private course update", createdAt: new Date()
+    });
+    const db = testEnv.authenticatedContext("alice").firestore();
+    await assertFails(getDoc(doc(db, "chatRooms/course_electrical/messages/message1")));
+  });
+
   it("prevents a user from sending a message as another account", async () => {
     const db = testEnv.authenticatedContext("alice").firestore();
     await assertFails(addDoc(collection(db, "chatRooms/general/messages"), {
