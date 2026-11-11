@@ -1,0 +1,32 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signed() { return request.auth != null; }
+    function studentDoc() {
+      return /databases/(default)/documents/students/$(request.auth.uid);
+    }
+    function admin() {
+      return signed() && firestore.exists(studentDoc())
+        && firestore.get(studentDoc()).data.role == 'admin';
+    }
+    function ownsModule(moduleId) {
+      return signed()
+        && firestore.exists(/databases/(default)/documents/modules/$(moduleId))
+        && firestore.get(/databases/(default)/documents/modules/$(moduleId)).data.teacherId == request.auth.uid;
+    }
+    function enrolled(moduleId) {
+      return signed()
+        && firestore.exists(/databases/(default)/documents/moduleEnrollments/$(request.auth.uid + '_' + moduleId));
+    }
+    match /moduleNotes/{moduleId}/{fileName} {
+      allow read: if signed() && (admin() || ownsModule(moduleId) || enrolled(moduleId));
+      allow create: if signed()
+        && (admin() || ownsModule(moduleId))
+        && request.resource.size > 0
+        && request.resource.size <= 20 * 1024 * 1024
+        && request.resource.contentType == 'application/pdf';
+      allow delete: if signed() && (admin() || ownsModule(moduleId));
+      allow update: if false;
+    }
+  }
+}
