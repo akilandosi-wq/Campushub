@@ -20,7 +20,7 @@ $$;
 create or replace function public.campushub_can_read(c text, rid text, d jsonb)
 returns boolean language plpgsql stable security definer set search_path = public
 as $$
-declare role_name text := public.campushub_role();
+declare role_name text := public.campushub_role(); room_id text; current_course text;
 begin
   if auth.uid() is null then return false; end if;
   if role_name = 'admin' then return true; end if;
@@ -45,8 +45,18 @@ begin
         and e.data->>'studentId' = auth.uid()::text
     );
   end if;
-  if c like 'chatRooms/%' then return true; end if;
-  if c = 'chatRooms' then return true; end if;
+  if c like 'chatRooms/%' then
+    room_id := split_part(c, '/', 2);
+    if room_id = 'general' then return true; end if;
+    if room_id like 'course_%' then
+      select data->>'course' into current_course from public.campushub_documents where collection_name = 'students' and id = auth.uid()::text;
+      return room_id = 'course_' || trim(both '_' from lower(regexp_replace(coalesce(current_course,''), '[^a-z0-9]+', '_', 'g')));
+    end if;
+    return exists (select 1 from public.campushub_documents r where r.collection_name = 'chatRooms' and r.id = room_id and r.data->'participants' ? auth.uid()::text);
+  end if;
+  if c = 'chatRooms' then
+    return d->>'type' in ('course','general') or d->'participants' ? auth.uid()::text;
+  end if;
   return false;
 end;
 $$;
@@ -54,17 +64,31 @@ $$;
 create or replace function public.campushub_can_write(c text, rid text, d jsonb)
 returns boolean language plpgsql stable security definer set search_path = public
 as $$
-declare role_name text := public.campushub_role();
+declare role_name text := public.campushub_role(); room_id text; current_course text;
 begin
   if auth.uid() is null then return false; end if;
   if role_name = 'admin' then return true; end if;
   if c = 'students' then return rid = auth.uid()::text and d->>'role' = role_name; end if;
   if c = 'publicProfiles' then return rid = auth.uid()::text; end if;
   if c = 'modules' then return d->>'teacherId' = auth.uid()::text; end if;
-  if c = 'moduleEnrollments' then return d->>'studentId' = auth.uid()::text or d->>'teacherId' = auth.uid()::text; end if;
+  if c = 'moduleEnrollments' then
+    return (d->>'studentId' = auth.uid()::text or d->>'teacherId' = auth.uid()::text)
+      and exists (select 1 from public.campushub_documents m where m.collection_name = 'modules' and m.id = d->>'moduleId' and m.data->>'teacherId' = d->>'teacherId');
+  end if;
   if c = 'work' or c = 'notes' then return d->>'teacherId' = auth.uid()::text and exists (select 1 from public.campushub_documents m where m.collection_name = 'modules' and m.id = d->>'moduleId' and m.data->>'teacherId' = auth.uid()::text); end if;
-  if c like 'chatRooms/%' then return d->>'senderId' = auth.uid()::text or d->>'type' in ('course','dm','general'); end if;
-  if c = 'chatRooms' then return true; end if;
+  if c like 'chatRooms/%' then
+    room_id := split_part(c, '/', 2);
+    if d->>'senderId' <> auth.uid()::text then return false; end if;
+    if room_id = 'general' then return true; end if;
+    if room_id like 'course_%' then
+      select data->>'course' into current_course from public.campushub_documents where collection_name = 'students' and id = auth.uid()::text;
+      return room_id = 'course_' || trim(both '_' from lower(regexp_replace(coalesce(current_course,''), '[^a-z0-9]+', '_', 'g')));
+    end if;
+    return exists (select 1 from public.campushub_documents r where r.collection_name = 'chatRooms' and r.id = room_id and r.data->'participants' ? auth.uid()::text);
+  end if;
+  if c = 'chatRooms' then
+    return d->>'type' in ('course','general') or d->'participants' ? auth.uid()::text;
+  end if;
   return false;
 end;
 $$;
@@ -91,6 +115,11 @@ on conflict (id) do update set public=false, file_size_limit=20971520, allowed_m
 drop policy if exists "CampusHub notes read" on storage.objects;
 drop policy if exists "CampusHub notes upload" on storage.objects;
 drop policy if exists "CampusHub notes delete" on storage.objects;
+do $ begin
+  alter publication supabase_realtime add table public.campushub_documents;
+exception when duplicate_object then null;
+end $;
+
 create policy "CampusHub notes read" on storage.objects for select to authenticated
 using (bucket_id = 'campushub-notes' and (
   (storage.foldername(name))[1] = 'moduleNotes'
