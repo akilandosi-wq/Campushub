@@ -1,6 +1,6 @@
 # CampusHub
 
-CampusHub is a browser-based campus portal built with vanilla HTML, CSS and JavaScript. Firebase Authentication handles sign-in, and Cloud Firestore stores student profiles, modules, enrolments, published academic work and chat messages.
+CampusHub is a browser-based campus portal built with vanilla HTML, CSS and JavaScript. Supabase Auth handles sign-in, PostgreSQL stores campus records, and a private Supabase Storage bucket stores uploaded PDF notes.
 
 ## Main features
 
@@ -18,11 +18,11 @@ CampusHub is a browser-based campus portal built with vanilla HTML, CSS and Java
 
 This is a static frontend; there is no build step.
 
-1. Create or select a Firebase project.
-2. Enable **Email/Password** in Firebase Authentication.
-3. Add your local development hostname and production hostname to Authentication's authorized domains.
-4. Create a Cloud Firestore database and enable Firebase Storage.
-5. Review `firebase-config.js` and set it to your Firebase web-app configuration.
+1. Create a Supabase project.
+2. Enable **Email** sign-in in Supabase Authentication.
+3. Add your local and production hostnames to Supabase Authentication URL Configuration.
+4. Create a Supabase PostgreSQL database and enable Firebase Storage.
+5. Check the Supabase project URL and publishable key in `supabase-client.js`.
 6. Deploy both security rule sets: `firebase deploy --only firestore:rules,storage`.
 7. Serve this directory through a local HTTP server (not by opening the HTML file directly). For example:
 
@@ -36,7 +36,7 @@ Do not deploy with test or permissive Firestore rules.
 
 ## Deploy
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for the required migration and release sequence. The Firestore rules in `firestore.rules` must be deployed to the same Firebase project used by `firebase-config.js`.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the required migration and release sequence. Run `supabase-schema.sql` in the Supabase project before publishing the website.
 
 ## Important data model
 
