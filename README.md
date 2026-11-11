@@ -8,6 +8,7 @@ CampusHub is a browser-based campus portal built with vanilla HTML, CSS and Java
 - Student academic profile and public directory profile
 - Module browsing and self-enrolment
 - Assignment and test announcements
+- Lecturer PDF notes upload to Firebase Storage with module-based student access
 - General, course and direct-message chat
 - Lecturer module and student-roster management
 - Separate teacher and administrator workspaces
@@ -20,9 +21,10 @@ This is a static frontend; there is no build step.
 1. Create or select a Firebase project.
 2. Enable **Email/Password** in Firebase Authentication.
 3. Add your local development hostname and production hostname to Authentication's authorized domains.
-4. Create a Cloud Firestore database.
+4. Create a Cloud Firestore database and enable Firebase Storage.
 5. Review `firebase-config.js` and set it to your Firebase web-app configuration.
-6. Serve this directory through a local HTTP server (not by opening the HTML file directly). For example:
+6. Deploy both security rule sets: `firebase deploy --only firestore:rules,storage`.
+7. Serve this directory through a local HTTP server (not by opening the HTML file directly). For example:
 
    ```bash
    python -m http.server 8000
@@ -45,6 +47,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the required migration and release sequen
 | `modules` | Published modules and lecturer ownership |
 | `moduleEnrollments` | Student/module relationship and lecturer roster metadata |
 | `work` | Published assignments and tests |
+| `notes` | PDF note metadata; file bytes are stored in Firebase Storage under `moduleNotes/{moduleId}/` |
 | `chatRooms/{roomId}/messages` | General, course and direct-message history |
 
 The public profile collection must not contain phone numbers, email addresses, registration numbers, birth dates, or guardian/emergency contact details.
