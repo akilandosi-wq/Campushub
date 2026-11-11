@@ -162,7 +162,7 @@ async function afterLink(k, r) {
 function askHandle(k) {
   const card = document.querySelector(`[data-card="${k}"]`); if (!card) return;
   const s = SOCIALS[k];
-  card.innerHTML = `<div class="nm"><span class="ic" style="--c:${s.c}"><i class="fa-brands ${s.i}"></i></span>${s.n}</div><small>After logging in, enter your ${esc(s.ph)} so classmates can find you.</small><input id="socIn" placeholder="${esc(s.ph)}"><div class="row-btns"><button class="btn-brand" style="--c:${s.c}" data-act="savesoc" data-k="${k}">Save</button><button class="btn btn-light btn-sm" data-act="cancelsoc">Cancel</button></div>`;
+  card.innerHTML = `<div class="nm"><span class="ic" style="--c:${s.c}"><i class="fa-brands ${s.i}"></i></span>${s.n}</div><small>Enter your ${esc(s.ph)} to connect this profile.</small><input id="socIn" placeholder="${esc(s.ph)}"><div class="row-btns"><button class="btn-brand" style="--c:${s.c}" data-act="savesoc" data-k="${k}">Connect</button><button class="btn btn-light btn-sm" data-act="cancelsoc">Cancel</button></div>`;
   $("socIn").focus();
 }
 
@@ -204,9 +204,14 @@ async function profilePage([mode]) {
     const on = (s.p && linked[s.p]) || profile.social?.[k];
     const who = profile.social?.[k] || (s.p && linked[s.p] && (linked[s.p].displayName || linked[s.p].email)) || "";
     const head = `<div class="nm"><span class="ic" style="--c:${s.c}"><i class="fa-brands ${s.i}"></i></span>${s.n}</div>`;
-    if (!on) return `<div class="soc-card" data-card="${k}">${head}<small>Not connected</small>${s.p ? `<button class="btn-brand" style="--c:${s.c}" data-act="oauth" data-k="${k}"><i class="fa-solid fa-link"></i> Log in &amp; connect</button>` : `<button class="btn-brand" style="--c:${s.c}" data-act="ext" data-k="${k}"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open ${s.n} &amp; connect</button>`}</div>`;
-    const url = socUrl(k, profile.social?.[k]);
-    return `<div class="soc-card" data-card="${k}">${head}<small><span class="tag green">CONNECTED</span> ${esc(who)}</small><div class="row-btns">${url ? `<a class="btn btn-light btn-sm" target="_blank" rel="noopener noreferrer" href="${esc(url)}">Open</a>` : ""}${s.b && !profile.social?.[k] ? `<button class="btn btn-light btn-sm" data-act="addhandle" data-k="${k}">Add profile link</button>` : ""}<button class="btn btn-danger btn-sm" data-act="unlink" data-k="${k}">Disconnect</button></div></div>`;
+    const openUrl = s.login || ("https://" + s.p);
+    const connectButton = s.p
+      ? (linked[s.p]
+          ? `<button class="btn-brand" style="--c:${s.c}" data-act="alreadyconnected" data-k="${k}">Connect</button>`
+          : `<button class="btn-brand" style="--c:${s.c}" data-act="oauth" data-k="${k}">Connect</button>`)
+      : `<button class="btn-brand" style="--c:${s.c}" data-act="connecthandle" data-k="${k}">Connect</button>`;
+    const status = on ? `<small><span class="tag green">CONNECTED</span> ${esc(who)}</small>` : `<small>Not connected</small>`;
+    return `<div class="soc-card" data-card="${k}">${head}${status}<div class="row-btns"><a class="btn btn-light btn-sm" target="_blank" rel="noopener noreferrer" href="${esc(openUrl)}">Open</a>${connectButton}</div></div>`;
   }).join("");
   const tabs = `<div class="tabs-card"><div class="tabs">${[["academic", "Academic Details"], ["contact", "Contact & Guardian"], ["social", "Social Links"]].map(([id, t]) => `<button class="tab${profileTab === id ? " on" : ""}" data-tab="${id}">${t}</button>`).join("")}</div>
     <div class="tabpane" data-pane="academic" ${profileTab !== "academic" ? "hidden" : ""}>
@@ -216,7 +221,7 @@ async function profilePage([mode]) {
     <div class="tabpane" data-pane="contact" ${profileTab !== "contact" ? "hidden" : ""}>
       <div class="info-row"><b><i class="fa-solid fa-phone"></i> Phone</b><span>${esc(profile.phone || "—")}</span></div><div class="info-row"><b><i class="fa-solid fa-envelope"></i> Email</b><span>${esc(profile.email || me.email)}</span></div>
       <div class="info-row"><b><i class="fa-solid fa-user-shield"></i> Guardian</b><span>${esc(profile.guardianName || "—")} ${esc(profile.emergency || "")}</span></div><div class="info-row"><b><i class="fa-solid fa-quote-left"></i> About me</b><span>${esc(profile.bio || "—")}</span></div></div>
-    <div class="tabpane" data-pane="social" ${profileTab !== "social" ? "hidden" : ""}><p class="subtle" style="margin-top:0">Press a button to open the app, log in to your own account and connect it to CampusHub.</p><div class="soc-grid">${socCards}</div></div></div>`;
+    <div class="tabpane" data-pane="social" ${profileTab !== "social" ? "hidden" : ""}><div class="soc-grid">${socCards}</div></div></div>`;
   view(`<div class="page-head"><h1><i class="fa-solid fa-users-viewfinder" style="color:var(--steel)"></i> Profile</h1>${edit && mode === "edit" ? "" : '<a class="btn btn-primary" href="#/profile/edit"><i class="fa-solid fa-pen"></i> Edit Profile</a>'}</div><div class="profile-grid">${left}${mode === "edit" ? edit : tabs}</div>`);
   document.querySelectorAll("[data-tab]").forEach(t => t.onclick = () => { profileTab = t.dataset.tab; document.querySelectorAll("[data-tab]").forEach(x => x.classList.toggle("on", x === t)); document.querySelectorAll("[data-pane]").forEach(p => (p.hidden = p.dataset.pane !== profileTab)); });
   if ($("pf")) $("pf").onsubmit = async e => {
