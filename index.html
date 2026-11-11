@@ -16,7 +16,7 @@
 <section id="authScreen" class="auth-bg hidden">
   <div class="login-card">
     <div class="login-head">
-      <h2>DAR-ES-SALAAM INSTITUTE OF TECHNOLOGY</h2>
+      <div class="auth-kicker">CAMPUS LIFE, CONNECTED</div><h2>DAR-ES-SALAAM INSTITUTE OF TECHNOLOGY</h2>
       <div class="logo-box"><img src="logo.png" alt="" onerror="this.outerHTML='<span class=logo-fallback><i class=&quot;fa-solid fa-graduation-cap&quot;></i></span>'"></div>
       <div class="app-name">CAMPUSHUB</div>
     </div>
@@ -49,10 +49,10 @@
   <aside class="sidebar" id="sidebar">
     <div class="side-logo"><img src="logo.png" alt="" onerror="this.outerHTML='<span class=logo-fallback><i class=&quot;fa-solid fa-graduation-cap&quot;></i></span>'"></div>
     <nav>
-      <a class="side-link" data-page="home" href="#/home"><i class="fa-solid fa-house"></i><span>Home</span></a>
+      <a class="side-link" data-student-only data-page="home" href="#/home"><i class="fa-solid fa-house"></i><span>Home</span></a>
       <a class="side-link" data-page="profile" href="#/profile"><i class="fa-solid fa-circle-user"></i><span>My Profile</span></a>
-      <a class="side-link" data-page="modules" href="#/modules"><i class="fa-solid fa-book-open"></i><span>Modules</span></a>
-      <a class="side-link" data-page="work" href="#/work"><i class="fa-solid fa-file-pen"></i><span>Assignments &amp; Tests</span></a>
+      <a class="side-link" data-student-only data-page="modules" href="#/modules"><i class="fa-solid fa-book-open"></i><span>Modules</span></a>
+      <a class="side-link" data-student-only data-page="work" href="#/work"><i class="fa-solid fa-file-pen"></i><span>Assignments &amp; Tests</span></a>
       <a class="side-link" data-page="chat" href="#/chat"><i class="fa-solid fa-comments"></i><span>Chat</span></a>
       <div class="side-bottom">
         <a class="side-link hidden" id="staffLink" href="admin.html"><i class="fa-solid fa-chalkboard-user"></i><span>Staff portal</span></a>

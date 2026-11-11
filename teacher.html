@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2b3b49">
+<title>CampusHub | Teacher Workspace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="portal portal-teacher" data-portal="teacher">
+<div id="app" class="app hidden">
+  <aside class="sidebar" id="sidebar">
+    <div class="side-logo"><img src="logo.png" alt="" onerror="this.outerHTML='<span class=logo-fallback><i class=&quot;fa-solid fa-graduation-cap&quot;></i></span>'"></div>
+    <nav>
+      <a class="side-link" data-page="dashboard" href="#/dashboard"><i class="fa-solid fa-gauge"></i><span>Overview</span></a>
+      <a class="side-link" data-page="modules" href="#/modules"><i class="fa-solid fa-book-open"></i><span>Modules</span></a>
+      <a class="side-link" data-page="work" href="#/work"><i class="fa-solid fa-file-pen"></i><span>Assignments &amp; Tests</span></a>
+      <a class="side-link" data-page="students" href="#/students"><i class="fa-solid fa-user-graduate"></i><span>My Students</span></a>
+      <a class="side-link" href="index.html#/chat"><i class="fa-solid fa-comments"></i><span>Chat</span></a>
+      <a class="side-link" href="index.html#/profile"><i class="fa-solid fa-circle-user"></i><span>My Profile</span></a>
+      <div class="side-bottom"><button class="side-link" id="logoutBtn"><i class="fa-solid fa-right-from-bracket"></i><span>Sign out</span></button></div>
+    </nav>
+  </aside>
+  <div class="content">
+    <header class="topbar">
+      <div class="top-left">
+        <button class="icon-btn" id="menuBtn" aria-label="Menu"><i class="fa-solid fa-bars"></i></button>
+        <button class="icon-btn" id="backBtn" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+        <div class="top-title"><strong id="pageTitle">Teacher Dashboard</strong><span id="roleLabel"></span></div>
+      </div>
+      <div class="top-user"><span class="user-name" id="topName"></span><span class="avatar" id="avatar">T</span></div>
+    </header>
+    <main class="main"><div id="view"></div></main>
+    <footer class="foot"><span>Copyright ©2026 <b>CampusHub</b> Teacher workspace. All rights reserved.</span></footer>
+  </div>
+</div>
+<div id="toast" class="toast"></div>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>
