@@ -8,7 +8,7 @@ CampusHub is a browser-based campus portal built with vanilla HTML, CSS and Java
 - Student academic profile and public directory profile
 - Module browsing and self-enrolment
 - Assignment and test announcements
-- Lecturer PDF notes upload to Firebase Storage with module-based student access
+- Lecturer PDF notes upload to private Supabase Storage with module-based student access
 - General, course and direct-message chat
 - Lecturer module and student-roster management
 - Separate teacher and administrator workspaces
@@ -21,9 +21,9 @@ This is a static frontend; there is no build step.
 1. Create a Supabase project.
 2. Enable **Email** sign-in in Supabase Authentication.
 3. Add your local and production hostnames to Supabase Authentication URL Configuration.
-4. Create a Supabase PostgreSQL database and enable Firebase Storage.
+4. Open Supabase SQL Editor and run `supabase-schema.sql` to create the database table, row-level security policies and private notes bucket.
 5. Check the Supabase project URL and publishable key in `supabase-client.js`.
-6. Deploy both security rule sets: `firebase deploy --only firestore:rules,storage`.
+6. Verify the `campushub-notes` bucket is private and limited to PDF files up to 20 MB.
 7. Serve this directory through a local HTTP server (not by opening the HTML file directly). For example:
 
    ```bash
@@ -32,7 +32,7 @@ This is a static frontend; there is no build step.
 
 7. Open `http://localhost:8000`.
 
-Do not deploy with test or permissive Firestore rules.
+Do not disable Supabase row-level security or expose a service-role key in the browser.
 
 ## Deploy
 
@@ -57,7 +57,7 @@ The browser uses the Supabase project URL and publishable key in `supabase-clien
 | `modules` | Published modules and lecturer ownership |
 | `moduleEnrollments` | Student/module relationship and lecturer roster metadata |
 | `work` | Published assignments and tests |
-| `notes` | PDF note metadata; file bytes are stored in Firebase Storage under `moduleNotes/{moduleId}/` |
+| `notes` | PDF note metadata; file bytes are stored in the private Supabase bucket under `moduleNotes/{moduleId}/` |
 | `chatRooms/{roomId}/messages` | General, course and direct-message history |
 
 Supabase stores these logical collections as JSONB records in `campushub_documents`; row-level security controls access. PDF notes are stored in the private `campushub-notes` bucket and served with short-lived signed URLs.
