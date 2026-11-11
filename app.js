@@ -293,7 +293,7 @@ async function chatPage(arg) {
       <form class="chat-form" id="cf"><input id="cmsg" placeholder="Write a message…" maxlength="1000" autocomplete="off"><button class="btn btn-primary" type="submit"><i class="fa-solid fa-paper-plane"></i></button></form></div></div>`);
 
   const ref = db.collection("chatRooms").doc(room).collection("messages");
-  const fmt = t => { if (!t) return "sending…"; const d = t.toDate(), now = new Date(); return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + (d.toDateString() === now.toDateString() ? "" : " · " + d.toLocaleDateString([], { day: "numeric", month: "short" })); };
+  const fmt = t => { if (!t) return "sending…"; const d = new Date(t), now = new Date(); return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + (d.toDateString() === now.toDateString() ? "" : " · " + d.toLocaleDateString([], { day: "numeric", month: "short" })); };
   unsub = ref.orderBy("createdAt").limitToLast(100).onSnapshot(s => {
     const b = $("cbox"); if (!b) return;
     b.innerHTML = s.docs.map(d => { const x = d.data(), mine = x.senderId === me.uid; return `<div class="chat-msg${mine ? " mine" : ""}"><div class="chat-meta">${mine ? "You" : esc(x.senderName || "Student")}<span class="chat-time">${fmt(x.createdAt)}</span></div>${esc(x.message)}</div>`; }).join("") || '<div class="empty">No messages yet. Say hello 👋</div>';
