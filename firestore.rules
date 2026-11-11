@@ -56,14 +56,35 @@ service cloud.firestore {
     // date-of-birth, or guardian details in this collection.
     match /publicProfiles/{uid} {
       allow read: if signed();
-      allow create: if (own(uid) || admin())
-        && request.resource.data.keys().hasOnly([
-          'fullName', 'course', 'year', 'bio', 'social'
-        ]);
-      allow update: if (own(uid) || admin())
-        && request.resource.data.keys().hasOnly([
-          'fullName', 'course', 'year', 'bio', 'social'
-        ]);
+      allow create: if (
+          own(uid)
+          && request.resource.data.keys().hasOnly([
+            'fullName', 'course', 'year', 'bio', 'social'
+          ])
+          && request.resource.data.fullName == profile().fullName
+          && request.resource.data.course == profile().course
+          && request.resource.data.year == profile().year
+        ) || (
+          admin()
+          && request.resource.data.keys().hasOnly([
+            'fullName', 'course', 'year', 'bio', 'social'
+          ])
+        );
+      allow update: if (
+          own(uid)
+          && request.resource.data.keys().hasOnly([
+            'fullName', 'course', 'year', 'bio', 'social'
+          ])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'fullName', 'bio', 'social'
+          ])
+          && request.resource.data.fullName == profile().fullName
+        ) || (
+          admin()
+          && request.resource.data.keys().hasOnly([
+            'fullName', 'course', 'year', 'bio', 'social'
+          ])
+        );
       allow delete: if admin();
     }
 
