@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const isStaff = () => ["teacher", "admin"].includes(profile.role);
 const slug = s => "course_" + String(s || "general").toLowerCase().replace(/[^a-z0-9]+/g, "_");
+const publicProfileData = p => ({ fullName: p.fullName || "", course: p.course || "", year: p.year || "", bio: p.bio || "", social: p.social || {} });
 const view = html => { $("view").innerHTML = html; };
 const head = (t, p) => `<div class="page-head"><h1>${t}</h1><p>${p}</p></div>`;
 const safeUrl = u => (/^https?:\/\//i.test(u || "") ? esc(u) : "");
@@ -51,6 +52,7 @@ $("authForm").addEventListener("submit", async e => {
       signingUp = true;
       const r = await auth.createUserWithEmailAndPassword(email, password);
       await db.collection("students").doc(r.user.uid).set({ ...p, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await db.collection("publicProfiles").doc(r.user.uid).set(publicProfileData(p));
       me = r.user; profile = p; authMsg(""); enter();
     } else await auth.signInWithEmailAndPassword(email, password);
   } catch (err) { authMsg(friendly(err)); }
@@ -64,7 +66,9 @@ auth.onAuthStateChanged(async u => {
   try {
     const d = await db.collection("students").doc(u.uid).get();
     if (!d.exists) { authMsg("Profile not found. Contact your administrator."); await auth.signOut(); return; }
-    profile = d.data(); enter();
+    profile = d.data();
+    await db.collection("publicProfiles").doc(u.uid).set(publicProfileData(profile), { merge: true });
+    enter();
   } catch (err) { authMsg(friendly(err)); $("authScreen").classList.remove("hidden"); }
 });
 
@@ -121,6 +125,7 @@ const socUrl = (k, v) => { v = String(v || "").trim(); const s = SOCIALS[k]; if 
 const socButtons = soc => Object.keys(SOCIALS).filter(k => soc?.[k] && socUrl(k, soc[k])).map(k => `<a class="soc" style="--c:${SOCIALS[k].c}" target="_blank" rel="noopener noreferrer" href="${esc(socUrl(k, soc[k]))}"><i class="fa-brands ${SOCIALS[k].i}"></i> ${SOCIALS[k].n}</a>`).join("");
 async function saveSocial(k, val) {
   await db.collection("students").doc(me.uid).update({ ["social." + k]: val });
+  await db.collection("publicProfiles").doc(me.uid).set({ social: { ...(profile.social || {}), [k]: val } }, { merge: true });
   profile.social = { ...(profile.social || {}), [k]: val };
 }
 async function oauthLink(k) {
@@ -173,8 +178,8 @@ async function profilePage([mode]) {
     <div class="field"><label>Phone number</label><input id="pPhone" type="tel" value="${esc(profile.phone)}"></div>
     <div class="field"><label>Gender</label><select id="pGender"><option value="">—</option>${opt(["Male", "Female"], profile.gender)}</select></div>
     <div class="field"><label>Date of birth</label><input id="pDob" type="date" value="${esc(profile.dob)}"></div>
-    <div class="field"><label>Programme</label><input id="pCourse" value="${esc(profile.course)}"></div>
-    <div class="field"><label>Year of study</label><select id="pYear"><option value="">—</option>${opt(["Year 1", "Year 2", "Year 3", "Year 4"], profile.year)}</select></div>
+    <div class="field"><label>Programme (contact administration to change)</label><input id="pCourse" value="${esc(profile.course)}" disabled></div>
+    <div class="field"><label>Year of study (contact administration to change)</label><select id="pYear" disabled><option value="">—</option>${opt(["Year 1", "Year 2", "Year 3", "Year 4"], profile.year)}</select></div>
     <div class="field"><label>Nationality</label><input id="pNat" value="${esc(profile.nationality)}"></div>
     <div class="field"><label>Guardian / emergency phone</label><input id="pEmerg" type="tel" value="${esc(profile.emergency)}"></div>
     <div class="field"><label>Guardian name</label><input id="pGName" value="${esc(profile.guardianName)}"></div>
@@ -201,22 +206,22 @@ async function profilePage([mode]) {
   document.querySelectorAll("[data-tab]").forEach(t => t.onclick = () => { profileTab = t.dataset.tab; document.querySelectorAll("[data-tab]").forEach(x => x.classList.toggle("on", x === t)); document.querySelectorAll("[data-pane]").forEach(p => (p.hidden = p.dataset.pane !== profileTab)); });
   if ($("pf")) $("pf").onsubmit = async e => {
     e.preventDefault();
-    const u = { fullName: $("pName").value.trim(), phone: $("pPhone").value.trim(), gender: $("pGender").value, dob: $("pDob").value, course: $("pCourse").value.trim(), year: $("pYear").value, nationality: $("pNat").value.trim(), emergency: $("pEmerg").value.trim(), guardianName: $("pGName").value.trim(), bio: $("pBio").value.trim() };
+    const u = { fullName: $("pName").value.trim(), phone: $("pPhone").value.trim(), gender: $("pGender").value, dob: $("pDob").value, nationality: $("pNat").value.trim(), emergency: $("pEmerg").value.trim(), guardianName: $("pGName").value.trim(), bio: $("pBio").value.trim() };
     if (!u.fullName) return toast("Name is required.", true);
-    try { await db.collection("students").doc(me.uid).update(u); profile = { ...profile, ...u }; $("topName").textContent = u.fullName; $("avatar").textContent = u.fullName[0].toUpperCase(); toast("Profile saved."); location.hash = "#/profile"; }
+    try { await db.collection("students").doc(me.uid).update(u); await db.collection("publicProfiles").doc(me.uid).set(publicProfileData({ ...profile, ...u }), { merge: true }); profile = { ...profile, ...u }; $("topName").textContent = u.fullName; $("avatar").textContent = u.fullName[0].toUpperCase(); toast("Profile saved."); location.hash = "#/profile"; }
     catch (err) { toast(friendly(err), true); }
   };
 }
 
 /* ---------- OTHER STUDENT'S PROFILE ---------- */
 async function studentPage([uid]) {
-  const d = await db.collection("students").doc(uid || "x").get();
+  const d = await db.collection("publicProfiles").doc(uid || "x").get();
   if (!d.exists) return view('<div class="panel empty">Profile not found.</div>');
   const s = d.data();
   view(head("Student profile", "") + `<div class="panel"><div class="profile-hero"><span class="avatar">${esc((s.fullName || "S")[0])}</span>
-    <div><h2 style="margin:0;color:var(--navy)">${esc(s.fullName)}</h2><p class="subtle" style="margin:4px 0">${esc(s.role === "student" ? (s.course || "") + (s.year ? " · " + s.year : "") : "Lecturer")}</p>
+    <div><h2 style="margin:0;color:var(--navy)">${esc(s.fullName)}</h2><p class="subtle" style="margin:4px 0">${esc((s.course || "CampusHub member") + (s.year ? " · " + s.year : ""))}</p>
     <p class="subtle" style="margin:0">${esc(s.bio)}</p></div></div>
-    ${isStaff() ? `<div class="list-item"><div><strong>Reg no / Phone</strong><small>${esc(s.regNo)} · ${esc(s.phone)} · ${esc(s.email)}</small></div></div>` : ""}
+    
     ${socButtons(s.social) ? `<h3 style="margin-top:20px">Links</h3><div class="soc-row">${socButtons(s.social)}</div>` : ""}
     ${uid !== me.uid ? `<a class="btn btn-primary" style="margin-top:20px" href="#/chat/dm/${esc(uid)}"><i class="fa-solid fa-comment"></i> Send message</a>` : ""}</div>`);
 }
@@ -244,10 +249,14 @@ async function workPage() {
 async function chatPage(arg) {
   const tok = navTok, [kind, other] = arg, inRoom = !!kind;
   let room = "general", title = "General room — all students";
-  if (kind === "class") { room = slug(profile.course); title = (profile.course || "My class") + " — class room"; }
+  if (kind === "class") {
+    room = slug(profile.course); title = (profile.course || "My class") + " — class room";
+    await db.collection("chatRooms").doc(room).set({ type: "course", course: profile.course }, { merge: true });
+  }
   if (kind === "dm" && other) {
     room = [me.uid, other].sort().join("_");
-    const d = await db.collection("students").doc(other).get();
+    await db.collection("chatRooms").doc(room).set({ type: "dm", participants: [me.uid, other].sort(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    const d = await db.collection("publicProfiles").doc(other).get();
     title = d.exists ? d.data().fullName : "Private chat";
   }
   if (tok !== navTok) return;
@@ -280,9 +289,9 @@ async function chatPage(arg) {
     catch (err) { $("cmsg").value = t; toast("Message not sent: " + friendly(err), true); }
   };
 
-  const all = (await db.collection("students").limit(300).get()).docs.filter(d => d.id !== me.uid).map(d => ({ id: d.id, ...d.data() }));
+  const all = (await db.collection("publicProfiles").limit(300).get()).docs.filter(d => d.id !== me.uid).map(d => ({ id: d.id, ...d.data() }));
   if (tok !== navTok) return;
-  const draw = q => { const l = all.filter(s => (s.fullName || "").toLowerCase().includes(q.toLowerCase())).slice(0, 40); const p = $("people"); if (p) p.innerHTML = l.map(s => `<a class="nav-btn${other === s.id ? " active" : ""}" href="#/chat/dm/${s.id}"><span class="avatar" style="width:30px;height:30px;font-size:12px">${esc((s.fullName || "?")[0])}</span><span>${esc(s.fullName)}<br><small style="color:var(--muted);font-weight:500">${esc(s.role === "student" ? s.course : "Lecturer")}</small></span></a>`).join("") || '<div class="empty">No one found.</div>'; };
+  const draw = q => { const l = all.filter(s => (s.fullName || "").toLowerCase().includes(q.toLowerCase())).slice(0, 40); const p = $("people"); if (p) p.innerHTML = l.map(s => `<a class="nav-btn${other === s.id ? " active" : ""}" href="#/chat/dm/${s.id}"><span class="avatar" style="width:30px;height:30px;font-size:12px">${esc((s.fullName || "?")[0])}</span><span>${esc(s.fullName)}<br><small style="color:var(--muted);font-weight:500">${esc(s.course || "CampusHub member")}</small></span></a>`).join("") || '<div class="empty">No one found.</div>'; };
   draw(""); $("pSearch").oninput = e => draw(e.target.value);
 }
 
@@ -307,6 +316,7 @@ document.addEventListener("click", async e => {
       if (!confirm("Disconnect " + s.n + "?")) return (b.disabled = false);
       if (s.p && me.providerData.some(p => p.providerId === s.p)) await me.unlink(s.p);
       await db.collection("students").doc(me.uid).update({ ["social." + k]: firebase.firestore.FieldValue.delete() });
+      await db.collection("publicProfiles").doc(me.uid).update({ ["social." + k]: firebase.firestore.FieldValue.delete() });
       if (profile.social) delete profile.social[k];
       toast("Disconnected."); route();
     }
