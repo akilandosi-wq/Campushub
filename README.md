@@ -38,6 +38,16 @@ Do not deploy with test or permissive Firestore rules.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the required migration and release sequence. Run `supabase-schema.sql` in the Supabase project before publishing the website.
 
+## Supabase setup
+
+1. Open the Supabase SQL Editor and run `supabase-schema.sql`.
+2. Confirm the private Storage bucket `campushub-notes` was created by the SQL script.
+3. In Authentication → URL Configuration, add the deployed site URL and local development URL.
+4. For immediate registration without email confirmation, turn off email confirmation in Authentication settings. If confirmation is enabled, complete the email-confirmation flow before expecting a profile to be created.
+5. Existing Firebase users and records are not copied automatically. Export/import the data and have users set/reset their passwords before switching production traffic.
+
+The browser uses the Supabase project URL and publishable key in `supabase-client.js`. Never put a Supabase secret/service-role key in frontend code.
+
 ## Important data model
 
 | Collection | Purpose |
@@ -49,6 +59,8 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the required migration and release sequen
 | `work` | Published assignments and tests |
 | `notes` | PDF note metadata; file bytes are stored in Firebase Storage under `moduleNotes/{moduleId}/` |
 | `chatRooms/{roomId}/messages` | General, course and direct-message history |
+
+Supabase stores these logical collections as JSONB records in `campushub_documents`; row-level security controls access. PDF notes are stored in the private `campushub-notes` bucket and served with short-lived signed URLs.
 
 The public profile collection must not contain phone numbers, email addresses, registration numbers, birth dates, or guardian/emergency contact details.
 
