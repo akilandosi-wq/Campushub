@@ -6,11 +6,11 @@ const isAdmin = () => profile.role === "admin";
 const portalRole = document.body.dataset.portal || "admin";
 const view = h => { $("view").innerHTML = h; };
 const head = (t, p) => `<div class="page-head"><h1>${t}</h1><p>${p}</p></div>`;
-const ms = t => (t && t.toMillis ? t.toMillis() : 0);
+const ms = t => (t ? new Date(t).getTime() : 0);
 const safeUrl = u => (/^https?:\/\//i.test(u || "") ? esc(u) : "");
 const col = n => db.collection(n);
 function toast(m, err) { const t = $("toast"); t.textContent = m; t.className = "toast show" + (err ? " err" : ""); clearTimeout(t._t); t._t = setTimeout(() => (t.className = "toast"), 3800); }
-const fail = e => toast(e.code === "permission-denied" ? "Permission denied. Publish the latest firestore.rules in Firebase Console." : e.message, true);
+const fail = e => toast(e.code === "permission-denied" ? "Permission denied. Check the Supabase SQL policies and user role." : e.message, true);
 
 auth.onAuthStateChanged(async u => {
   if (!u) return location.replace("index.html");
@@ -66,6 +66,32 @@ const workForm = mods => `<form id="wf"><div class="form-grid">
   <div class="field full"><label>Instructions / details</label><input id="wDet"></div>
   <div class="field full"><label>Material link (Google Drive, PDF, etc. — optional)</label><input id="wLink" type="url" placeholder="https://"></div></div>
   <button class="btn btn-primary" type="submit"><i class="fa-solid fa-upload"></i> Publish</button></form>`;
+function noteRow(n) {
+  return `<div class="list-item"><div><strong><i class="fa-solid fa-file-pdf"></i> ${esc(n.title)}</strong><small>${esc(n.fileName)} · ${(n.size / 1024 / 1024).toFixed(1)} MB</small></div><div class="row-btns"><button class="btn btn-light btn-sm" data-act="downloadnote" data-path="${esc(n.storagePath)}" data-name="${esc(n.fileName)}"><i class="fa-solid fa-download"></i> Download</button><button class="btn btn-danger btn-sm" data-act="delnote" data-id="${n.id}" data-path="${esc(n.storagePath)}"><i class="fa-solid fa-trash"></i></button></div></div>`;
+}
+function bindNotesForm(moduleId) {
+  const form = $("notesForm"); if (!form) return;
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const input = $("notesFile"), file = input.files && input.files[0], title = $("notesTitle").value.trim();
+    if (!file || !title) return toast("Enter a notes title and choose a PDF file.", true);
+    if (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) return toast("Only PDF notes are supported.", true);
+    if (file.size > 20 * 1024 * 1024) return toast("PDF must be 20 MB or smaller.", true);
+    const btn = form.querySelector('button[type="submit"]'); btn.disabled = true;
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-100) || "notes.pdf";
+    const storagePath = `moduleNotes/${moduleId}/${me.uid}_${Date.now()}_${safeName}`;
+    try {
+      const uploaded = await firebase.storage().ref(storagePath).put(file, { contentType: "application/pdf", customMetadata: { moduleId, uploadedBy: me.uid } });
+      try {
+        await col("notes").add({ moduleId, moduleName: $("notesModuleName").value, title, fileName: file.name, storagePath, contentType: "application/pdf", size: file.size, teacherId: me.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      } catch (err) {
+        await uploaded.ref.delete().catch(() => {});
+        throw err;
+      }
+      toast("Notes uploaded successfully."); route();
+    } catch (err) { fail(err); btn.disabled = false; }
+  };
+}
 function bindWorkForm(modId) {
   const f = $("wf"); if (!f) return;
   if (modId) $("wMod").value = modId;
@@ -149,18 +175,27 @@ async function modulePage([id]) {
   const md = await col("modules").doc(id || "x").get();
   if (!md.exists) return view('<div class="panel empty">Module not found.</div>');
   const m = { id, ...md.data() };
-  const [enrS, workS] = await Promise.all([col("moduleEnrollments").where("moduleId", "==", id).where("teacherId", "==", m.teacherId).get(), col("work").where("moduleId", "==", id).get()]);
+  const [enrS, workS, notesS] = await Promise.all([col("moduleEnrollments").where("moduleId", "==", id).where("teacherId", "==", m.teacherId).get(), col("work").where("moduleId", "==", id).get(), col("notes").where("moduleId", "==", id).get()]);
   const st = enrS.docs.map(d => d.data()).sort((a, b) => a.studentName.localeCompare(b.studentName));
   const wk = workS.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const notes = notesS.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => ms(b.createdAt) - ms(a.createdAt));
   const rows = q => st.filter(s => (s.studentName + s.regNo).toLowerCase().includes(q.toLowerCase())).map(s => `<tr><td><a href="index.html#/student/${esc(s.studentId)}">${esc(s.studentName)}</a></td><td>${esc(s.regNo)}</td><td>${esc(s.phone)}</td><td>${esc(s.course)}</td><td>${esc(s.year)}</td><td><a href="index.html#/chat/dm/${esc(s.studentId)}"><i class="fa-solid fa-comment"></i></a></td></tr>`).join("") || '<tr><td colspan="6" class="empty">No students found.</td></tr>';
   view(head(esc(m.code) + " — " + esc(m.name), esc(m.description || "Module overview")) + `
   <div class="stats">${stat("fa-user-graduate", st.length, "Registered students")}${stat("fa-file-pen", wk.filter(w => w.type !== "test").length, "Assignments")}${stat("fa-clipboard-check", wk.filter(w => w.type === "test").length, "Tests / Exams")}</div>
   <div class="panel"><h3>Publish assignment or test</h3>${workForm([m])}</div>
   <div class="panel"><h3>Published work</h3>${wk.map(w => workRow(w)).join("") || '<div class="empty">Nothing published yet.</div>'}</div>
+  <div class="panel"><h3>Module notes (PDF)</h3>
+    <form id="notesForm"><input id="notesModuleName" type="hidden" value="${esc(m.code + " — " + m.name)}"><div class="form-grid">
+      <div class="field"><label>Notes title</label><input id="notesTitle" maxlength="100" placeholder="e.g. Network Fundamentals — Chapter 1" required></div>
+      <div class="field"><label>Select PDF (maximum 20 MB)</label><input id="notesFile" type="file" accept="application/pdf,.pdf" required></div>
+    </div><button class="btn btn-primary" type="submit"><i class="fa-solid fa-cloud-arrow-up"></i> Upload notes</button></form>
+    <div class="notes-list">${notes.map(n => noteRow(n)).join("") || '<div class="empty">No notes uploaded for this module yet.</div>'}</div>
+  </div>
   <div class="panel"><h3>Registered students</h3><div class="toolbar"><input class="form-control" id="sq" placeholder="Search by name or reg no…"><button class="btn btn-light" id="csv"><i class="fa-solid fa-download"></i> Export CSV</button></div>
   <div class="table-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Reg no</th><th>Phone</th><th>Programme</th><th>Year</th><th></th></tr></thead><tbody id="srows">${rows("")}</tbody></table></div></div>
   <div class="panel"><h3>Module settings</h3><div class="row-btns"><button class="btn btn-danger" data-act="delmod" data-id="${id}" data-t="${esc(m.teacherId)}"><i class="fa-solid fa-trash"></i> Delete this module</button></div><p class="subtle">Deleting a module also removes its registrations and published work.</p></div>`);
   bindWorkForm(id);
+  bindNotesForm(id);
   $("sq").oninput = e => { $("srows").innerHTML = rows(e.target.value); };
   $("csv").onclick = () => {
     const q = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
@@ -223,11 +258,22 @@ document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const { act, id } = b.dataset;
   try {
+    if (act === "downloadnote") {
+      const url = await firebase.storage().ref(b.dataset.path).getDownloadURL();
+      const a = document.createElement("a"); a.href = url; a.download = b.dataset.name || "notes.pdf"; a.target = "_blank"; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove();
+    }
+    if (act === "delnote") {
+      if (!confirm("Delete this notes file?")) return;
+      await firebase.storage().ref(b.dataset.path).delete();
+      await col("notes").doc(id).delete();
+      toast("Notes deleted."); route();
+    }
     if (act === "delwork") { if (!confirm("Delete this item?")) return; await col("work").doc(id).delete(); toast("Deleted."); route(); }
     if (act === "delmod") {
       if (!confirm("Delete this module with all its registrations and work?")) return;
-      const [a, w] = await Promise.all([col("moduleEnrollments").where("moduleId", "==", id).where("teacherId", "==", b.dataset.t).get(), col("work").where("moduleId", "==", id).get()]);
-      const batch = db.batch(); a.docs.concat(w.docs).forEach(d => batch.delete(d.ref)); batch.delete(col("modules").doc(id)); await batch.commit();
+      const [a, w, n] = await Promise.all([col("moduleEnrollments").where("moduleId", "==", id).where("teacherId", "==", b.dataset.t).get(), col("work").where("moduleId", "==", id).get(), col("notes").where("moduleId", "==", id).get()]);
+      await Promise.all(n.docs.map(d => firebase.storage().ref(d.data().storagePath).delete().catch(() => {})));
+      const batch = db.batch(); a.docs.concat(w.docs, n.docs).forEach(d => batch.delete(d.ref)); batch.delete(col("modules").doc(id)); await batch.commit();
       toast("Module deleted."); location.hash = "#/modules";
     }
   } catch (err) { fail(err); }

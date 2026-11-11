@@ -241,10 +241,18 @@ async function studentPage([uid]) {
 async function modulesPage() {
   const mods = (await db.collection("modules").get()).docs.map(d => ({ id: d.id, ...d.data() }));
   const my = new Set((await db.collection("moduleEnrollments").where("studentId", "==", me.uid).get()).docs.map(d => d.data().moduleId));
-  view(head("Modules", "Register for the modules you take. Only you and the module lecturer can see your registration.") + `<div class="panel">${mods.map(m => `
+  const noteSnaps = await Promise.all([...my].map(id => db.collection("notes").where("moduleId", "==", id).get()));
+  const notesByModule = {};
+  noteSnaps.forEach(s => s.docs.forEach(d => { const n = d.data(); (notesByModule[n.moduleId] ||= []).push({ id: d.id, ...n }); }));
+  view(head("Modules", "Register for the modules you take. Only you and the module lecturer can see your registration.") + `<div class="panel">${mods.map(m => {
+    const notes = notesByModule[m.id] || [];
+    return `
     <div class="list-item"><div><strong>${esc(m.code)} — ${esc(m.name)}</strong><small>Lecturer: ${esc(m.teacherName || "—")}</small><small>${esc(m.description)}</small>
-    ${safeUrl(m.resource) ? `<small><a href="${safeUrl(m.resource)}" target="_blank" rel="noopener">Open learning resource</a></small>` : ""}</div>
-    ${my.has(m.id) ? `<div class="row-btns"><span class="tag green">REGISTERED</span><button class="btn btn-danger btn-sm" data-act="drop" data-id="${m.id}">Drop</button></div>` : `<button class="btn btn-primary btn-sm" data-act="enroll" data-id="${m.id}" data-t="${esc(m.teacherId)}" data-n="${esc(m.code + " " + m.name)}">Register</button>`}</div>`).join("") || '<div class="empty">No modules have been published yet.</div>'}</div>`);
+    ${safeUrl(m.resource) ? `<small><a href="${safeUrl(m.resource)}" target="_blank" rel="noopener">Open learning resource</a></small>` : ""}
+    ${my.has(m.id) && notes.length ? `<div class="module-notes"><small><b><i class="fa-solid fa-file-pdf"></i> Notes uploaded</b></small>${notes.map(n => `<div class="row-btns"><span>${esc(n.title)}</span><button class="btn btn-light btn-sm" data-act="downloadnote" data-path="${esc(n.storagePath)}" data-name="${esc(n.fileName)}"><i class="fa-solid fa-download"></i> Download PDF</button></div>`).join("")}</div>` : ""}
+    </div>
+    ${my.has(m.id) ? `<div class="row-btns"><span class="tag green">REGISTERED</span><button class="btn btn-danger btn-sm" data-act="drop" data-id="${m.id}">Drop</button></div>` : `<button class="btn btn-primary btn-sm" data-act="enroll" data-id="${m.id}" data-t="${esc(m.teacherId)}" data-n="${esc(m.code + " " + m.name)}">Register</button>`}</div>`;
+  }).join("") || '<div class="empty">No modules have been published yet.</div>'}</div>`);
 }
 
 /* ---------- ASSIGNMENTS & TESTS (student) ---------- */
@@ -285,7 +293,7 @@ async function chatPage(arg) {
       <form class="chat-form" id="cf"><input id="cmsg" placeholder="Write a message…" maxlength="1000" autocomplete="off"><button class="btn btn-primary" type="submit"><i class="fa-solid fa-paper-plane"></i></button></form></div></div>`);
 
   const ref = db.collection("chatRooms").doc(room).collection("messages");
-  const fmt = t => { if (!t) return "sending…"; const d = t.toDate(), now = new Date(); return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + (d.toDateString() === now.toDateString() ? "" : " · " + d.toLocaleDateString([], { day: "numeric", month: "short" })); };
+  const fmt = t => { if (!t) return "sending…"; const d = new Date(t), now = new Date(); return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + (d.toDateString() === now.toDateString() ? "" : " · " + d.toLocaleDateString([], { day: "numeric", month: "short" })); };
   unsub = ref.orderBy("createdAt").limitToLast(100).onSnapshot(s => {
     const b = $("cbox"); if (!b) return;
     b.innerHTML = s.docs.map(d => { const x = d.data(), mine = x.senderId === me.uid; return `<div class="chat-msg${mine ? " mine" : ""}"><div class="chat-meta">${mine ? "You" : esc(x.senderName || "Student")}<span class="chat-time">${fmt(x.createdAt)}</span></div>${esc(x.message)}</div>`; }).join("") || '<div class="empty">No messages yet. Say hello 👋</div>';
@@ -311,7 +319,10 @@ document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const { act, id } = b.dataset; b.disabled = true;
   try {
-    if (act === "enroll") {
+    if (act === "downloadnote") {
+      const url = await firebase.storage().ref(b.dataset.path).getDownloadURL();
+      const a = document.createElement("a"); a.href = url; a.download = b.dataset.name || "notes.pdf"; a.target = "_blank"; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove();
+    } else if (act === "enroll") {
       await db.collection("moduleEnrollments").doc(me.uid + "_" + id).set({ studentId: me.uid, moduleId: id, moduleName: b.dataset.n, teacherId: b.dataset.t, studentName: profile.fullName, regNo: profile.regNo || "", phone: profile.phone || "", year: profile.year || "", course: profile.course || "", enrolledAt: firebase.firestore.FieldValue.serverTimestamp() });
       toast("Registered successfully."); route();
     } else if (act === "drop") {
