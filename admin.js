@@ -1,8 +1,9 @@
-// CampusHub — staff portal (teachers + admins)
+// CampusHub — role-specific teacher and administrator portals
 let me = null, profile = {};
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const isAdmin = () => profile.role === "admin";
+const portalRole = document.body.dataset.portal || "admin";
 const view = h => { $("view").innerHTML = h; };
 const head = (t, p) => `<div class="page-head"><h1>${t}</h1><p>${p}</p></div>`;
 const ms = t => (t && t.toMillis ? t.toMillis() : 0);
@@ -18,10 +19,15 @@ auth.onAuthStateChanged(async u => {
     const d = await col("students").doc(u.uid).get();
     profile = d.exists ? d.data() : {};
   } catch (e) { return location.replace("index.html"); }
-  if (!["teacher", "admin"].includes(profile.role)) return location.replace("index.html");
+  if (profile.role !== portalRole) {
+    if (profile.role === "admin") return location.replace("admin.html");
+    if (profile.role === "teacher") return location.replace("teacher.html");
+    return location.replace("index.html");
+  }
   $("topName").textContent = profile.fullName; $("avatar").textContent = (profile.fullName || "T")[0].toUpperCase();
-  $("roleLabel").textContent = isAdmin() ? "Administrator" : "Lecturer";
-  $("usersLink").classList.toggle("hidden", !isAdmin());
+  $("roleLabel").textContent = isAdmin() ? "Administrator" : "Teacher";
+  const usersLink = $("usersLink");
+  if (usersLink) usersLink.classList.toggle("hidden", !isAdmin());
   $("app").classList.remove("hidden");
   if (!location.hash) history.replaceState(null, "", "#/dashboard");
   route();
@@ -44,7 +50,7 @@ function route() {
   $("backBtn").style.visibility = page === "dashboard" ? "hidden" : "visible";
   $("sidebar").classList.remove("open"); window.scrollTo(0, 0);
   view('<div class="empty">Loading…</div>');
-  const pages = { dashboard, modules, module: modulePage, work: workAll, students, users };
+  const pages = { dashboard: isAdmin() ? adminDashboard : dashboard, modules, module: modulePage, work: workAll, students, users };
   (pages[page] || dashboard)(arg).catch(e => view(`<div class="panel empty">Could not load: ${esc(e.message)}</div>`));
 }
 
@@ -83,6 +89,39 @@ async function dashboard() {
   <div class="stats" style="grid-template-columns:repeat(4,minmax(0,1fr))">${stat("fa-book-open", mods.length, "Modules")}${stat("fa-user-graduate", new Set(enr.map(e => e.studentId)).size, "Students")}${stat("fa-file-pen", work.filter(w => w.type !== "test").length, "Assignments")}${stat("fa-clipboard-check", work.filter(w => w.type === "test").length, "Tests / Exams")}</div>
   <div class="cols"><div class="panel"><h3>Upcoming deadlines</h3>${up.map(w => workRow(w, false)).join("") || '<div class="empty">Nothing upcoming.</div>'}</div>
   <div class="panel"><h3>Latest registrations</h3>${recent.map(r => `<div class="list-item"><div><strong>${esc(r.studentName)}</strong><small>${esc(r.regNo)} · ${esc(r.moduleName)}</small></div></div>`).join("") || '<div class="empty">No registrations yet.</div>'}</div></div>`);
+}
+
+/* ----- administrator overview ----- */
+async function adminDashboard() {
+  const [mods, enr, work, usersSnap] = await Promise.all([
+    myModules(), myEnr(), myWork(), col("students").get()
+  ]);
+  const users = usersSnap.docs.map(d => d.data());
+  const teachers = users.filter(u => u.role === "teacher").length;
+  const studentsCount = users.filter(u => u.role === "student").length;
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = work.filter(w => w.date && w.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5);
+  view(head("System overview", "Manage CampusHub users, academic modules and published work.") + `
+    <div class="stats admin-stats">
+      ${stat("fa-users", users.length, "Total accounts")}
+      ${stat("fa-user-graduate", studentsCount, "Students")}
+      ${stat("fa-chalkboard-user", teachers, "Teachers")}
+      ${stat("fa-book-open", mods.length, "Modules")}
+    </div>
+    <div class="admin-shortcuts">
+      <a class="admin-shortcut" href="#/users"><i class="fa-solid fa-user-gear"></i><span><b>Manage accounts</b><small>Assign student, teacher and admin roles</small></span><i class="fa-solid fa-arrow-right"></i></a>
+      <a class="admin-shortcut" href="#/modules"><i class="fa-solid fa-book"></i><span><b>Academic modules</b><small>Review all modules and enrolments</small></span><i class="fa-solid fa-arrow-right"></i></a>
+      <a class="admin-shortcut" href="#/students"><i class="fa-solid fa-users"></i><span><b>Student activity</b><small>View enrolments across the platform</small></span><i class="fa-solid fa-arrow-right"></i></a>
+    </div>
+    <div class="cols">
+      <div class="panel"><h3>Upcoming academic deadlines</h3>${upcoming.map(w => workRow(w, false)).join("") || '<div class="empty">No upcoming deadlines.</div>'}</div>
+      <div class="panel"><h3>Platform activity</h3>
+        <div class="admin-metric"><span>Published assignments</span><b>${work.filter(w => w.type !== "test").length}</b></div>
+        <div class="admin-metric"><span>Tests and exams</span><b>${work.filter(w => w.type === "test").length}</b></div>
+        <div class="admin-metric"><span>Module registrations</span><b>${enr.length}</b></div>
+      </div>
+    </div>`);
 }
 
 /* ----- modules ----- */
