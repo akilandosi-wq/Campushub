@@ -155,8 +155,24 @@ async function users() {
   if (!isAdmin()) return view('<div class="panel empty">Administrators only.</div>');
   const all = (await col("students").get()).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.fullName || "").localeCompare(b.fullName || ""));
   const rows = q => all.filter(s => ((s.fullName || "") + (s.email || "") + (s.regNo || "")).toLowerCase().includes(q.toLowerCase())).map(s => `<tr><td>${esc(s.fullName)}</td><td>${esc(s.email)}</td><td>${esc(s.regNo)}</td><td><select data-role="${s.id}" ${s.id === me.uid ? "disabled" : ""}>${["student", "teacher", "admin"].map(r => `<option ${s.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></td></tr>`).join("");
-  view(head("Manage Users", "Promote a registered account to lecturer or administrator.") + `<div class="panel"><div class="toolbar"><input class="form-control" id="uq" placeholder="Search name, email or reg no…"></div><div class="table-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Email</th><th>Reg no</th><th>Role</th></tr></thead><tbody id="urows">${rows("")}</tbody></table></div></div>`);
+  view(head("Manage Users", "Promote a registered account to lecturer or administrator.") + `<div class="panel"><div class="row-btns" style="margin-bottom:14px"><button class="btn btn-light" id="syncProfiles"><i class="fa-solid fa-rotate"></i> Sync public profiles</button></div><p class="subtle">Run this once after deploying the new rules to copy existing directory-safe fields into publicProfiles. It does not copy private contact or guardian details.</p><div class="toolbar"><input class="form-control" id="uq" placeholder="Search name, email or reg no…"></div><div class="table-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Email</th><th>Reg no</th><th>Role</th></tr></thead><tbody id="urows">${rows("")}</tbody></table></div></div>`);
   $("uq").oninput = e => { $("urows").innerHTML = rows(e.target.value); };
+  $("syncProfiles").onclick = async () => {
+    const btn = $("syncProfiles"); btn.disabled = true;
+    try {
+      const batchLimit = 400;
+      for (let i = 0; i < all.length; i += batchLimit) {
+        const batch = db.batch();
+        all.slice(i, i + batchLimit).forEach(s => batch.set(db.collection("publicProfiles").doc(s.id), {
+          fullName: s.fullName || "", course: s.course || "", year: s.year || "",
+          bio: s.bio || "", social: s.social || {}
+        }, { merge: true }));
+        await batch.commit();
+      }
+      toast("Public profiles synchronized.");
+    } catch (err) { fail(err); }
+    finally { btn.disabled = false; }
+  };
 }
 document.addEventListener("change", async e => {
   const id = e.target.dataset.role; if (!id) return;
