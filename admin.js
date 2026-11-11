@@ -271,8 +271,9 @@ document.addEventListener("click", async e => {
     if (act === "delwork") { if (!confirm("Delete this item?")) return; await col("work").doc(id).delete(); toast("Deleted."); route(); }
     if (act === "delmod") {
       if (!confirm("Delete this module with all its registrations and work?")) return;
-      const [a, w] = await Promise.all([col("moduleEnrollments").where("moduleId", "==", id).where("teacherId", "==", b.dataset.t).get(), col("work").where("moduleId", "==", id).get()]);
-      const batch = db.batch(); a.docs.concat(w.docs).forEach(d => batch.delete(d.ref)); batch.delete(col("modules").doc(id)); await batch.commit();
+      const [a, w, n] = await Promise.all([col("moduleEnrollments").where("moduleId", "==", id).where("teacherId", "==", b.dataset.t).get(), col("work").where("moduleId", "==", id).get(), col("notes").where("moduleId", "==", id).get()]);
+      await Promise.all(n.docs.map(d => firebase.storage().ref(d.data().storagePath).delete().catch(() => {})));
+      const batch = db.batch(); a.docs.concat(w.docs, n.docs).forEach(d => batch.delete(d.ref)); batch.delete(col("modules").doc(id)); await batch.commit();
       toast("Module deleted."); location.hash = "#/modules";
     }
   } catch (err) { fail(err); }
