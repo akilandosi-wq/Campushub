@@ -50,7 +50,7 @@ $("authForm").addEventListener("submit", async e => {
       const p = { fullName: $("fullName").value.trim(), phone: $("phone").value.trim(), regNo: $("regNo").value.trim(), course: $("course").value.trim(), year: $("year").value, gender: $("gender").value, email, role: "student" };
       if (!p.fullName || !p.phone || !p.regNo || !p.course || !p.year) throw { message: "Fill in all registration details." };
       signingUp = true;
-      const r = await auth.createUserWithEmailAndPassword(email, password);
+      const r = await auth.createUserWithEmailAndPassword(email, password, p);
       await db.collection("students").doc(r.user.uid).set({ ...p, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
       me = r.user; profile = p; authMsg(""); enter();
       // Create the directory-safe profile in the background. Firestore rules
