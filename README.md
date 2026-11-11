@@ -10,6 +10,7 @@ CampusHub is a browser-based campus portal built with vanilla HTML, CSS and Java
 - Assignment and test announcements
 - General, course and direct-message chat
 - Lecturer module and student-roster management
+- Separate teacher and administrator workspaces
 - Administrator role management
 
 ## Run locally
