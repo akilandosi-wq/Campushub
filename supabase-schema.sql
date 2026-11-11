@@ -115,10 +115,10 @@ on conflict (id) do update set public=false, file_size_limit=20971520, allowed_m
 drop policy if exists "CampusHub notes read" on storage.objects;
 drop policy if exists "CampusHub notes upload" on storage.objects;
 drop policy if exists "CampusHub notes delete" on storage.objects;
-do $ begin
+do $campushub$ begin
   alter publication supabase_realtime add table public.campushub_documents;
 exception when duplicate_object then null;
-end $;
+end $campushub$;
 
 create policy "CampusHub notes read" on storage.objects for select to authenticated
 using (bucket_id = 'campushub-notes' and (
