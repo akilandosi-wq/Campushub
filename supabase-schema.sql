@@ -24,7 +24,7 @@ declare role_name text := public.campushub_role();
 begin
   if auth.uid() is null then return false; end if;
   if role_name = 'admin' then return true; end if;
-  if c = 'students' then return rid = auth.uid()::text; end if;
+  if c = 'students' then return rid = auth.uid()::text and d->>'role' = role_name; end if;
   if c = 'publicProfiles' or c = 'modules' then return true; end if;
   if c = 'moduleEnrollments' then
     return d->>'studentId' = auth.uid()::text or d->>'teacherId' = auth.uid()::text;
@@ -62,7 +62,7 @@ begin
   if c = 'publicProfiles' then return rid = auth.uid()::text; end if;
   if c = 'modules' then return d->>'teacherId' = auth.uid()::text; end if;
   if c = 'moduleEnrollments' then return d->>'studentId' = auth.uid()::text or d->>'teacherId' = auth.uid()::text; end if;
-  if c = 'work' or c = 'notes' then return d->>'teacherId' = auth.uid()::text; end if;
+  if c = 'work' or c = 'notes' then return d->>'teacherId' = auth.uid()::text and exists (select 1 from public.campushub_documents m where m.collection_name = 'modules' and m.id = d->>'moduleId' and m.data->>'teacherId' = auth.uid()::text); end if;
   if c like 'chatRooms/%' then return d->>'senderId' = auth.uid()::text or d->>'type' in ('course','dm','general'); end if;
   if c = 'chatRooms' then return true; end if;
   return false;
@@ -102,7 +102,7 @@ using (bucket_id = 'campushub-notes' and (
   )
 ));
 create policy "CampusHub notes upload" on storage.objects for insert to authenticated
-with check (bucket_id = 'campushub-notes' and (storage.foldername(name))[1] = 'moduleNotes');
+with check (bucket_id = 'campushub-notes' and (storage.foldername(name))[1] = 'moduleNotes' and (public.campushub_role() = 'admin' or exists (select 1 from public.campushub_documents m where m.collection_name = 'modules' and m.id = (storage.foldername(name))[2] and m.data->>'teacherId' = auth.uid()::text)));
 create policy "CampusHub notes delete" on storage.objects for delete to authenticated
 using (bucket_id = 'campushub-notes' and (
   public.campushub_role() = 'admin'
