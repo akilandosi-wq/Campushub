@@ -156,6 +156,33 @@ service cloud.firestore {
       );
     }
 
+    // PDF notes: students can read notes only for modules they joined.
+    match /notes/{noteId} {
+      function enrolled(moduleId) {
+        return exists(/databases/$(database)/documents/moduleEnrollments/$(request.auth.uid + '_' + moduleId));
+      }
+      allow read: if signed() && (
+        admin()
+        || resource.data.teacherId == request.auth.uid
+        || enrolled(resource.data.moduleId)
+      );
+      allow create: if staff()
+        && request.resource.data.keys().hasOnly([
+          'moduleId', 'moduleName', 'title', 'fileName', 'storagePath',
+          'contentType', 'size', 'teacherId', 'createdAt'
+        ])
+        && request.resource.data.teacherId == request.auth.uid
+        && request.resource.data.contentType == 'application/pdf'
+        && request.resource.data.size is int
+        && request.resource.data.size > 0
+        && request.resource.data.size <= 20 * 1024 * 1024
+        && request.resource.data.storagePath is string
+        && exists(/databases/$(database)/documents/modules/$(request.resource.data.moduleId))
+        && (admin() || get(/databases/$(database)/documents/modules/$(request.resource.data.moduleId)).data.teacherId == request.auth.uid);
+      allow update: if false;
+      allow delete: if admin() || (staff() && resource.data.teacherId == request.auth.uid);
+    }
+
     match /chatRooms/{roomId} {
       allow get: if signed() && (
         roomId == 'general'
