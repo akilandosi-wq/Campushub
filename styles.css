@@ -237,3 +237,7 @@ button,a,.panel,.scard,.stat,.side-link{transition:all .18s ease}
  .scard{min-width:0}
 }
 @media(max-width:420px){.status-grid{grid-template-columns:1fr}.login-head{padding:20px 18px 12px}}
+
+/* Keep page titles and supporting text grouped as a readable heading block. */
+.page-head{display:block;position:relative;padding-left:30px}
+.page-head:before{position:absolute;left:0;top:18px;bottom:18px;width:5px;margin:0;align-self:auto}
