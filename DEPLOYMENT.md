@@ -44,6 +44,7 @@ New registrations create their public profile automatically. Existing users also
 - Confirm an administrator can manage users and modules as intended.
 - Test general chat, same-course chat and a direct message between two accounts; verify a third account cannot read the DM.
 - Verify public profiles contain no private contact or guardian fields.
+- Check existing course chat history. The updated room ID uses the exact programme string (for example, `course_Computer Engineering`); older rooms created with the previous normalized/lowercase ID may need a planned migration if their history must be retained.
 
 ## Rollback
 
