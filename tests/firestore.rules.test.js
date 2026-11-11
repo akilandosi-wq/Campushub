@@ -6,7 +6,7 @@ const {
 } = require("@firebase/rules-unit-testing");
 const { doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp } = require("firebase/firestore");
 
-const projectId = "campushub-rules-test";
+const projectId = "demo-campushub";
 let testEnv;
 
 async function seed(path, data) {
