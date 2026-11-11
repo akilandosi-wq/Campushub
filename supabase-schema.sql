@@ -58,7 +58,7 @@ declare role_name text := public.campushub_role();
 begin
   if auth.uid() is null then return false; end if;
   if role_name = 'admin' then return true; end if;
-  if c = 'students' then return rid = auth.uid()::text; end if;
+  if c = 'students' then return rid = auth.uid()::text and d->>'role' = role_name; end if;
   if c = 'publicProfiles' then return rid = auth.uid()::text; end if;
   if c = 'modules' then return d->>'teacherId' = auth.uid()::text; end if;
   if c = 'moduleEnrollments' then return d->>'studentId' = auth.uid()::text or d->>'teacherId' = auth.uid()::text; end if;
