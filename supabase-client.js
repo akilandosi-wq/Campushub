@@ -2,8 +2,8 @@
  * Uses Supabase Auth, PostgreSQL JSONB documents and private Storage.
  * The compatibility surface keeps the existing UI stable during migration.
  */
-const SUPABASE_URL = "https://rqsvxanncnbrpkgzazxi.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_GeuoMX4Vu2CRatTmgu2IGg_7wBiUYFY";
+const SUPABASE_URL = "https://sjczautqlvdhdulweaag.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_gi24oDiNH4kRUZIDWI-7_Q_NKa8K6CF";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const auth = {
   Auth: { Persistence: { LOCAL: "local", SESSION: "session" } },
