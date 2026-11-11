@@ -66,7 +66,9 @@ auth.onAuthStateChanged(async u => {
   try {
     const d = await db.collection("students").doc(u.uid).get();
     if (!d.exists) { authMsg("Profile not found. Contact your administrator."); await auth.signOut(); return; }
-    profile = d.data(); enter();
+    profile = d.data();
+    await db.collection("publicProfiles").doc(u.uid).set(publicProfileData(profile), { merge: true });
+    enter();
   } catch (err) { authMsg(friendly(err)); $("authScreen").classList.remove("hidden"); }
 });
 
@@ -176,8 +178,8 @@ async function profilePage([mode]) {
     <div class="field"><label>Phone number</label><input id="pPhone" type="tel" value="${esc(profile.phone)}"></div>
     <div class="field"><label>Gender</label><select id="pGender"><option value="">—</option>${opt(["Male", "Female"], profile.gender)}</select></div>
     <div class="field"><label>Date of birth</label><input id="pDob" type="date" value="${esc(profile.dob)}"></div>
-    <div class="field"><label>Programme</label><input id="pCourse" value="${esc(profile.course)}"></div>
-    <div class="field"><label>Year of study</label><select id="pYear"><option value="">—</option>${opt(["Year 1", "Year 2", "Year 3", "Year 4"], profile.year)}</select></div>
+    <div class="field"><label>Programme (contact administration to change)</label><input id="pCourse" value="${esc(profile.course)}" disabled></div>
+    <div class="field"><label>Year of study (contact administration to change)</label><select id="pYear" disabled><option value="">—</option>${opt(["Year 1", "Year 2", "Year 3", "Year 4"], profile.year)}</select></div>
     <div class="field"><label>Nationality</label><input id="pNat" value="${esc(profile.nationality)}"></div>
     <div class="field"><label>Guardian / emergency phone</label><input id="pEmerg" type="tel" value="${esc(profile.emergency)}"></div>
     <div class="field"><label>Guardian name</label><input id="pGName" value="${esc(profile.guardianName)}"></div>
