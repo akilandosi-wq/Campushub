@@ -8,8 +8,12 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const auth = {
   Auth: { Persistence: { LOCAL: "local", SESSION: "session" } },
   setPersistence: async () => {},
-  createUserWithEmailAndPassword: async (email, password) => {
-    const { data, error } = await sb.auth.signUp({ email, password });
+  createUserWithEmailAndPassword: async (email, password, profile = {}) => {
+    const { data, error } = await sb.auth.signUp({ email, password, options: { data: {
+      fullName: profile.fullName || "", phone: profile.phone || "", regNo: profile.regNo || "",
+      course: profile.course || "", year: profile.year || "", gender: profile.gender || "",
+      email, role: "student"
+    } } });
     if (error) throw error;
     return { user: wrapUser(data.user) };
   },
