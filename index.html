@@ -3,74 +3,74 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#073b66">
-<title>CampusHub | Student Portal</title>
+<meta name="theme-color" content="#2b3b49">
+<title>CampusHub</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-<section id="authScreen" class="auth-shell hidden">
-  <div class="auth-brand">
-    <div class="brand-mark"><i class="fa-solid fa-graduation-cap"></i> CampusHub</div>
-    <div class="brand-copy">
-      <span class="eyebrow">Student Portal</span>
-      <h1>Your studies, your classmates, your lecturers. One place.</h1>
-      <p>Register for your modules, follow assignments and tests, and chat with your class from any phone or computer.</p>
+<section id="authScreen" class="auth-bg hidden">
+  <div class="login-card">
+    <div class="login-head">
+      <h2>DAR-ES-SALAAM INSTITUTE OF TECHNOLOGY</h2>
+      <div class="logo-box"><img src="logo.png" alt="" onerror="this.outerHTML='<span class=logo-fallback><i class=&quot;fa-solid fa-graduation-cap&quot;></i></span>'"></div>
+      <div class="app-name">CAMPUSHUB</div>
     </div>
-    <div class="brand-foot">© CampusHub</div>
-  </div>
-  <div class="auth-side">
-    <div class="auth-card">
-      <h2 id="authTitle">Sign in</h2>
-      <p class="subtle" id="authSub">Use your email and password to continue.</p>
+    <div class="login-body">
       <form id="authForm" novalidate>
         <div id="regFields" class="hidden">
-          <div class="field"><label for="fullName">Full name</label><input id="fullName" autocomplete="name"></div>
-          <div class="form-grid">
-            <div class="field"><label for="phone">Phone number</label><input id="phone" type="tel" placeholder="+255 7XX XXX XXX" autocomplete="tel"></div>
-            <div class="field"><label for="regNo">Registration number</label><input id="regNo"></div>
-          </div>
-          <div class="form-grid">
-            <div class="field"><label for="course">Programme</label><input id="course" placeholder="e.g. Computer Engineering"></div>
-            <div class="field"><label for="year">Year of study</label>
-              <select id="year"><option value="">Select</option><option>Year 1</option><option>Year 2</option><option>Year 3</option><option>Year 4</option></select></div>
-          </div>
+          <input class="input" id="fullName" placeholder="Full name" autocomplete="name">
+          <input class="input" id="phone" type="tel" placeholder="Phone number e.g. 2557XXXXXXXX" autocomplete="tel">
+          <input class="input" id="regNo" placeholder="Registration number">
+          <input class="input" id="course" placeholder="Programme e.g. Computer Engineering">
+          <select class="input select" id="year"><option value="">Year of study</option><option>Year 1</option><option>Year 2</option><option>Year 3</option><option>Year 4</option></select>
+          <select class="input select" id="gender"><option value="">Gender (optional)</option><option>Male</option><option>Female</option></select>
         </div>
-        <div class="field"><label for="email">Email address</label><input id="email" type="email" autocomplete="email"></div>
-        <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password"></div>
-        <button class="btn btn-primary btn-block" id="submitBtn" type="submit">Sign in</button>
+        <div class="input-group"><input id="email" type="email" placeholder="Email" autocomplete="email"><span class="addon"><i class="fa-solid fa-envelope"></i></span></div>
+        <div class="input-group"><input id="password" type="password" placeholder="Password" autocomplete="current-password"><button type="button" class="addon" id="eyeBtn" aria-label="Show password"><i class="fa-solid fa-eye-slash"></i></button></div>
+        <div class="login-row" id="loginRow">
+          <label class="check"><input type="checkbox" id="remember" checked> Remember Me</label>
+          <button type="button" class="link" id="forgotBtn">Forgot password?</button>
+        </div>
+        <button class="btn-teal" id="submitBtn" type="submit">Sign In</button>
       </form>
-      <p class="switch"><span id="switchText">New student?</span> <button id="switchBtn" type="button">Create account</button></p>
+      <div class="or"><span id="switchText">Don't have an account?</span></div>
+      <button class="btn-steel" id="switchBtn" type="button">Register</button>
       <p id="authMsg" class="notice"></p>
     </div>
   </div>
 </section>
 
 <div id="app" class="app hidden">
-  <header class="topbar">
-    <div class="top-left">
-      <button class="icon-btn mobile-menu" id="menuBtn" aria-label="Menu"><i class="fa-solid fa-bars"></i></button>
-      <button class="icon-btn" id="backBtn" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
-      <div class="top-title"><strong id="pageTitle">Overview</strong><span id="roleLabel">Student portal</span></div>
-    </div>
-    <a class="top-user" href="#/profile"><span class="user-name" id="topName"></span><span class="avatar" id="avatar">S</span></a>
-  </header>
-  <div class="layout">
-    <aside class="sidebar" id="sidebar">
-      <div class="nav-label">MENU</div>
-      <a class="nav-btn" data-page="home" href="#/home"><i class="fa-solid fa-table-cells-large"></i> Overview</a>
-      <a class="nav-btn" data-page="modules" href="#/modules"><i class="fa-solid fa-book-open"></i> Modules</a>
-      <a class="nav-btn" data-page="work" href="#/work"><i class="fa-solid fa-list-check"></i> Assignments &amp; Tests</a>
-      <a class="nav-btn" data-page="chat" href="#/chat"><i class="fa-solid fa-comments"></i> Chat</a>
-      <a class="nav-btn" data-page="profile" href="#/profile"><i class="fa-solid fa-user"></i> My Profile</a>
-      <div class="sidebar-bottom">
-        <a class="nav-btn hidden" id="staffLink" href="admin.html"><i class="fa-solid fa-chalkboard-user"></i> Staff portal</a><button class="nav-btn" id="logoutBtn"><i class="fa-solid fa-right-from-bracket"></i> Sign out</button></div>
-    </aside>
+  <aside class="sidebar" id="sidebar">
+    <div class="side-logo"><img src="logo.png" alt="" onerror="this.outerHTML='<span class=logo-fallback><i class=&quot;fa-solid fa-graduation-cap&quot;></i></span>'"></div>
+    <nav>
+      <a class="side-link" data-page="home" href="#/home"><i class="fa-solid fa-house"></i><span>Home</span></a>
+      <a class="side-link" data-page="profile" href="#/profile"><i class="fa-solid fa-circle-user"></i><span>My Profile</span></a>
+      <a class="side-link" data-page="modules" href="#/modules"><i class="fa-solid fa-book-open"></i><span>Modules</span></a>
+      <a class="side-link" data-page="work" href="#/work"><i class="fa-solid fa-file-pen"></i><span>Assignments &amp; Tests</span></a>
+      <a class="side-link" data-page="chat" href="#/chat"><i class="fa-solid fa-comments"></i><span>Chat</span></a>
+      <div class="side-bottom">
+        <a class="side-link hidden" id="staffLink" href="admin.html"><i class="fa-solid fa-chalkboard-user"></i><span>Staff portal</span></a>
+        <button class="side-link" id="logoutBtn"><i class="fa-solid fa-right-from-bracket"></i><span>Sign out</span></button>
+      </div>
+    </nav>
+  </aside>
+  <div class="content">
+    <header class="topbar">
+      <div class="top-left">
+        <button class="icon-btn" id="menuBtn" aria-label="Menu"><i class="fa-solid fa-bars"></i></button>
+        <button class="icon-btn" id="backBtn" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+        <div class="top-title"><strong id="pageTitle">Home</strong><span id="roleLabel"></span></div>
+      </div>
+      <a class="top-user" href="#/profile"><span class="user-name" id="topName"></span><span class="avatar" id="avatar">S</span></a>
+    </header>
     <main class="main"><div id="view"></div></main>
+    <footer class="foot"><span>Copyright ©2026 <b>CampusHub</b>. All rights reserved.</span></footer>
   </div>
 </div>
 <div id="toast" class="toast"></div>

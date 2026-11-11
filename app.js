@@ -19,17 +19,24 @@ function friendly(e) {
 }
 
 /* ---------- AUTH ---------- */
+const PERSIST = () => ($("remember").checked ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION);
 function setMode(reg) {
   regMode = reg;
-  $("authTitle").textContent = reg ? "Create your account" : "Sign in";
-  $("authSub").textContent = reg ? "Fill in your student details to get started." : "Use your email and password to continue.";
-  $("submitBtn").textContent = reg ? "Register" : "Sign in";
-  $("switchText").textContent = reg ? "Already registered?" : "New student?";
-  $("switchBtn").textContent = reg ? "Sign in" : "Create account";
+  $("submitBtn").textContent = reg ? "Create Account" : "Sign In";
+  $("switchText").textContent = reg ? "Already have an account?" : "Don't have an account?";
+  $("switchBtn").textContent = reg ? "Sign In" : "Register";
   $("regFields").classList.toggle("hidden", !reg);
+  $("loginRow").classList.toggle("hidden", reg);
+  $("password").autocomplete = reg ? "new-password" : "current-password";
   authMsg("");
 }
 $("switchBtn").onclick = () => setMode(!regMode);
+$("eyeBtn").onclick = () => { const p = $("password"), show = p.type === "password"; p.type = show ? "text" : "password"; $("eyeBtn").innerHTML = `<i class="fa-solid ${show ? "fa-eye" : "fa-eye-slash"}"></i>`; };
+$("forgotBtn").onclick = async () => {
+  const email = $("email").value.trim();
+  if (!email) return authMsg("Enter your email above first.");
+  try { await auth.sendPasswordResetEmail(email); authMsg("Reset link sent. Check your email (and spam).", false); } catch (e) { authMsg(friendly(e)); }
+};
 
 $("authForm").addEventListener("submit", async e => {
   e.preventDefault();
@@ -37,8 +44,9 @@ $("authForm").addEventListener("submit", async e => {
   $("submitBtn").disabled = true; authMsg("Please wait…", false);
   try {
     if (!email || !password) throw { message: "Enter your email and password." };
+    await auth.setPersistence(PERSIST());
     if (regMode) {
-      const p = { fullName: $("fullName").value.trim(), phone: $("phone").value.trim(), regNo: $("regNo").value.trim(), course: $("course").value.trim(), year: $("year").value, email, role: "student" };
+      const p = { fullName: $("fullName").value.trim(), phone: $("phone").value.trim(), regNo: $("regNo").value.trim(), course: $("course").value.trim(), year: $("year").value, gender: $("gender").value, email, role: "student" };
       if (!p.fullName || !p.phone || !p.regNo || !p.course || !p.year) throw { message: "Fill in all registration details." };
       signingUp = true;
       const r = await auth.createUserWithEmailAndPassword(email, password);
@@ -60,17 +68,21 @@ auth.onAuthStateChanged(async u => {
   } catch (err) { authMsg(friendly(err)); $("authScreen").classList.remove("hidden"); }
 });
 
+let redirectChecked = false;
 function enter() {
   $("authScreen").classList.add("hidden"); $("app").classList.remove("hidden");
   $("topName").textContent = profile.fullName;
   $("avatar").textContent = (profile.fullName || "S").charAt(0).toUpperCase();
-  $("roleLabel").textContent = isStaff() ? "Staff account" : (profile.course || "Student portal");
   $("staffLink").classList.toggle("hidden", !isStaff());
   if (!location.hash) history.replaceState(null, "", "#/home");
   route();
+  if (!redirectChecked) {
+    redirectChecked = true;
+    auth.getRedirectResult().then(r => { const k = sessionStorage.getItem("linking"); if (r && r.user && k) { sessionStorage.removeItem("linking"); afterLink(k, r); } }).catch(e => toast(friendly(e), true));
+  }
 }
 $("logoutBtn").onclick = () => auth.signOut();
-$("menuBtn").onclick = () => $("sidebar").classList.toggle("open");
+$("menuBtn").onclick = () => (innerWidth > 800 ? $("app").classList.toggle("mini") : $("sidebar").classList.toggle("open"));
 $("backBtn").onclick = () => (history.length > 1 ? history.back() : (location.hash = "#/home"));
 
 /* ---------- ROUTER ---------- */
@@ -81,83 +93,117 @@ function route() {
   navTok++;
   const [page = "home", ...arg] = location.hash.replace(/^#\/?/, "").split("/");
   if (isStaff() && ["home", "modules", "work"].includes(page)) return location.replace("admin.html#/" + (page === "home" ? "dashboard" : page));
-  const titles = { home: "Overview", modules: "Modules", work: "Assignments & Tests", chat: "Chat", profile: "My Profile", student: "Student profile" };
+  const titles = { home: "Home", modules: "Modules", work: "Assignments & Tests", chat: "Chat", profile: "My Profile", student: "Student profile" };
   $("pageTitle").textContent = titles[page] || "Overview";
-  document.querySelectorAll(".nav-btn[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
+  document.querySelectorAll(".side-link[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
   $("backBtn").style.visibility = page === "home" ? "hidden" : "visible";
   $("sidebar").classList.remove("open"); window.scrollTo(0, 0);
   view('<div class="empty">Loading…</div>');
   const pages = { home: homePage, modules: modulesPage, work: workPage, chat: chatPage, profile: profilePage, student: studentPage };
-  (pages[page] || homePage)(arg).catch(err => view(`<div class="panel empty">Could not load: ${esc(friendly(err))}</div>`));
+  return (pages[page] || homePage)(arg).catch(err => view(`<div class="panel empty">Could not load: ${esc(friendly(err))}</div>`));
 }
 
-/* ---------- SOCIAL LINKS ---------- */
-// key: [label, icon, brand colour, url builder, placeholder]
-const SOC = {
-  instagram: ["Instagram", "fa-instagram", "#E1306C", v => "https://instagram.com/" + v, "username"],
-  facebook: ["Facebook", "fa-facebook-f", "#1877F2", v => "https://facebook.com/" + v, "profile name or full link"],
-  x: ["X", "fa-x-twitter", "#111111", v => "https://x.com/" + v, "username"],
-  tiktok: ["TikTok", "fa-tiktok", "#010101", v => "https://tiktok.com/@" + v, "username"],
-  linkedin: ["LinkedIn", "fa-linkedin-in", "#0A66C2", v => "https://linkedin.com/in/" + v, "profile name or full link"],
-  whatsapp: ["WhatsApp", "fa-whatsapp", "#25D366", v => "https://wa.me/" + v.replace(/\D/g, ""), "phone number e.g. 2557…"],
-  github: ["GitHub", "fa-github", "#24292f", v => "https://github.com/" + v, "username"],
-  youtube: ["YouTube", "fa-youtube", "#FF0000", v => "https://youtube.com/@" + v, "channel name"]
+/* ---------- SOCIAL ACCOUNTS ---------- */
+// p = Firebase provider id (real OAuth link) · f = provider factory · b = public profile URL builder · login = app login page
+const SOCIALS = {
+  google: { n: "Google", i: "fa-google", c: "#DB4437", p: "google.com", f: () => new firebase.auth.GoogleAuthProvider() },
+  facebook: { n: "Facebook", i: "fa-facebook-f", c: "#1877F2", p: "facebook.com", f: () => new firebase.auth.FacebookAuthProvider(), b: v => "https://facebook.com/" + v, ph: "profile name or full link" },
+  x: { n: "X (Twitter)", i: "fa-x-twitter", c: "#111111", p: "twitter.com", f: () => new firebase.auth.TwitterAuthProvider(), b: v => "https://x.com/" + v, ph: "username" },
+  github: { n: "GitHub", i: "fa-github", c: "#24292f", p: "github.com", f: () => new firebase.auth.GithubAuthProvider(), b: v => "https://github.com/" + v, ph: "username" },
+  microsoft: { n: "Microsoft", i: "fa-microsoft", c: "#2F2F2F", p: "microsoft.com", f: () => new firebase.auth.OAuthProvider("microsoft.com") },
+  instagram: { n: "Instagram", i: "fa-instagram", c: "#E1306C", login: "https://www.instagram.com/accounts/login/", b: v => "https://instagram.com/" + v, ph: "your username" },
+  tiktok: { n: "TikTok", i: "fa-tiktok", c: "#010101", login: "https://www.tiktok.com/login", b: v => "https://tiktok.com/@" + v, ph: "your username" },
+  linkedin: { n: "LinkedIn", i: "fa-linkedin-in", c: "#0A66C2", login: "https://www.linkedin.com/login", b: v => "https://linkedin.com/in/" + v, ph: "profile name or full link" },
+  whatsapp: { n: "WhatsApp", i: "fa-whatsapp", c: "#25D366", login: "https://web.whatsapp.com/", b: v => "https://wa.me/" + v.replace(/\D/g, ""), ph: "your number e.g. 2557XXXXXXXX", raw: 1 },
+  youtube: { n: "YouTube", i: "fa-youtube", c: "#FF0000", login: "https://accounts.google.com/ServiceLogin?service=youtube", b: v => "https://youtube.com/@" + v, ph: "your channel name" }
 };
-const socUrl = (k, v) => { v = String(v || "").trim(); if (!v) return ""; if (/^https?:\/\//i.test(v)) return v; return SOC[k][3](k === "whatsapp" ? v : encodeURIComponent(v.replace(/^@/, ""))); };
-const socButtons = s => Object.keys(SOC).filter(k => s?.[k]).map(k => `<a class="soc" style="--c:${SOC[k][2]}" target="_blank" rel="noopener noreferrer" href="${esc(socUrl(k, s[k]))}"><i class="fa-brands ${SOC[k][1]}"></i> ${SOC[k][0]}</a>`).join("");
-const PROVIDERS = { "google.com": ["Google", "fa-google", "#DB4437", () => new firebase.auth.GoogleAuthProvider()], "facebook.com": ["Facebook", "fa-facebook-f", "#1877F2", () => new firebase.auth.FacebookAuthProvider()], "twitter.com": ["X", "fa-x-twitter", "#111111", () => new firebase.auth.TwitterAuthProvider()] };
+const socUrl = (k, v) => { v = String(v || "").trim(); const s = SOCIALS[k]; if (!v || !s?.b) return ""; if (/^https?:\/\//i.test(v)) return v; return s.b(s.raw ? v : encodeURIComponent(v.replace(/^@/, ""))); };
+const socButtons = soc => Object.keys(SOCIALS).filter(k => soc?.[k] && socUrl(k, soc[k])).map(k => `<a class="soc" style="--c:${SOCIALS[k].c}" target="_blank" rel="noopener noreferrer" href="${esc(socUrl(k, soc[k]))}"><i class="fa-brands ${SOCIALS[k].i}"></i> ${SOCIALS[k].n}</a>`).join("");
+async function saveSocial(k, val) {
+  await db.collection("students").doc(me.uid).update({ ["social." + k]: val });
+  profile.social = { ...(profile.social || {}), [k]: val };
+}
+async function oauthLink(k) {
+  const prov = SOCIALS[k].f();
+  try { afterLink(k, await me.linkWithPopup(prov)); }
+  catch (e) {
+    if (["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/cancelled-popup-request"].includes(e.code)) { sessionStorage.setItem("linking", k); return me.linkWithRedirect(prov); }
+    throw e;
+  }
+}
+async function afterLink(k, r) {
+  const s = SOCIALS[k], un = r?.additionalUserInfo?.username;
+  if (un && s.b) await saveSocial(k, un);
+  profileTab = "social"; toast(s.n + " connected.");
+  if (location.hash.indexOf("#/profile") !== 0) location.hash = "#/profile";
+  await route();
+  if (!un && s.b) askHandle(k);
+}
+function askHandle(k) {
+  const card = document.querySelector(`[data-card="${k}"]`); if (!card) return;
+  const s = SOCIALS[k];
+  card.innerHTML = `<div class="nm"><span class="ic" style="--c:${s.c}"><i class="fa-brands ${s.i}"></i></span>${s.n}</div><small>After logging in, enter your ${esc(s.ph)} so classmates can find you.</small><input id="socIn" placeholder="${esc(s.ph)}"><div class="row-btns"><button class="btn-brand" style="--c:${s.c}" data-act="savesoc" data-k="${k}">Save</button><button class="btn btn-light btn-sm" data-act="cancelsoc">Cancel</button></div>`;
+  $("socIn").focus();
+}
 
 /* ---------- HOME ---------- */
 async function homePage() {
   const n = (await db.collection("moduleEnrollments").where("studentId", "==", me.uid).get()).size;
-  view(head("Welcome, " + esc(profile.fullName.split(" ")[0]), "Here is a summary of your academic space.") + `
-  <div class="stats">
-    <div class="stat"><div class="stat-icon"><i class="fa-solid fa-book-open"></i></div><div><strong>${n}</strong><span>Registered modules</span></div></div>
-    <div class="stat"><div class="stat-icon"><i class="fa-solid fa-id-card"></i></div><div><strong style="font-size:15px">${esc(profile.regNo || "—")}</strong><span>Registration number</span></div></div>
-    <div class="stat"><div class="stat-icon"><i class="fa-solid fa-calendar"></i></div><div><strong style="font-size:15px">${esc(profile.year || "—")}</strong><span>Year of study</span></div></div>
-  </div>
-  <div class="cols">
-    <div class="panel"><h3>My details</h3>
-      <div class="list-item"><div><strong>Programme</strong><small>${esc(profile.course || "—")}</small></div></div>
-      <div class="list-item"><div><strong>Phone</strong><small>${esc(profile.phone || "—")}</small></div></div>
-      <div class="list-item"><div><strong>Email</strong><small>${esc(profile.email || me.email)}</small></div></div></div>
-    <div class="panel"><h3>Quick access</h3><div class="row-btns">
-      <a class="btn btn-light" href="#/modules"><i class="fa-solid fa-book-open"></i> Modules</a>
-      <a class="btn btn-light" href="#/work"><i class="fa-solid fa-list-check"></i> Assignments</a>
-      <a class="btn btn-light" href="#/chat"><i class="fa-solid fa-comments"></i> Chat</a>
-      <a class="btn btn-light" href="#/profile"><i class="fa-solid fa-user"></i> Profile</a></div>
-      ${socButtons(profile.social) ? `<h3 style="margin-top:20px">My links</h3><div class="soc-row">${socButtons(profile.social)}</div>` : ""}</div>
-  </div>`);
+  const card = (c, ic, t, v) => `<div class="scard"><div class="sicon" style="background:${c}"><i class="fa-solid ${ic}"></i></div><div><b>${t}</b><small>${esc(v)}</small></div></div>`;
+  view(`<div class="page-head"><div><h1><i class="fa-solid fa-gauge" style="color:var(--steel)"></i> Welcome, ${esc(profile.fullName.split(" ")[0])}</h1><p>Your academic space at a glance.</p></div></div>
+  <div class="status-grid">${card("#325d73", "fa-book", "Registered Modules", n + (n === 1 ? " module" : " modules"))}${card("#dc3545", "fa-id-card", "Registration No.", profile.regNo || "—")}${card("#ffc107", "fa-forward-step", "Year of Study", profile.year || "—")}${card("#17a2b8", "fa-graduation-cap", "Programme", profile.course || "—")}</div>
+  <div class="cols"><div class="panel"><h3>Quick access</h3><div class="row-btns">
+    <a class="btn btn-light" href="#/modules"><i class="fa-solid fa-book-open"></i> Modules</a><a class="btn btn-light" href="#/work"><i class="fa-solid fa-file-pen"></i> Assignments</a>
+    <a class="btn btn-light" href="#/chat"><i class="fa-solid fa-comments"></i> Chat</a><a class="btn btn-light" href="#/profile"><i class="fa-solid fa-circle-user"></i> Profile</a></div></div>
+  <div class="panel"><h3>My social links</h3>${socButtons(profile.social) ? `<div class="soc-row">${socButtons(profile.social)}</div>` : '<p class="subtle">You have not connected any account yet. <a href="#/profile">Connect now</a></p>'}</div></div>`);
 }
 
-/* ---------- PROFILE ---------- */
-async function profilePage() {
+/* ---------- PROFILE (SOMA-style) ---------- */
+let profileTab = "academic";
+async function profilePage([mode]) {
+  const n = (await db.collection("moduleEnrollments").where("studentId", "==", me.uid).get()).size;
   const linked = Object.fromEntries(me.providerData.map(p => [p.providerId, p]));
-  const opt = ["Year 1", "Year 2", "Year 3", "Year 4"].map(y => `<option ${profile.year === y ? "selected" : ""}>${y}</option>`).join("");
-  const s = profile.social || {};
-  view(head("My Profile", "Keep your details up to date so lecturers and classmates can find you.") + `
-  <form id="pf">
-  <div class="panel"><h3>Student details</h3><div class="form-grid">
+  const kv = (a, b) => `<div class="kv"><b>${a}</b><span>${esc(b || "—")}</span></div>`;
+  const left = `<div class="pcard"><div style="text-align:center"><span class="avatar" style="width:70px;height:70px;font-size:28px;margin:0 auto">${esc((profile.fullName || "S")[0].toUpperCase())}</span></div>
+    <h2>${esc((profile.fullName || "").toUpperCase())}</h2><div class="reg">${esc(profile.regNo)}</div>
+    ${kv("Gender", profile.gender)}${kv("Date of birth", profile.dob)}${kv("Programme", profile.course)}${kv("Year", profile.year)}${kv("Nationality", profile.nationality)}${kv("Phone", profile.phone)}${kv("Email", profile.email || me.email)}</div>`;
+  const opt = (arr, v) => arr.map(y => `<option ${v === y ? "selected" : ""}>${y}</option>`).join("");
+  const edit = `<div class="tabs-card"><div class="tabpane"><h3 style="margin-top:0">Edit profile</h3><form id="pf"><div class="form-grid">
     <div class="field"><label>Full name</label><input id="pName" value="${esc(profile.fullName)}"></div>
     <div class="field"><label>Phone number</label><input id="pPhone" type="tel" value="${esc(profile.phone)}"></div>
-    <div class="field"><label>Registration number</label><input value="${esc(profile.regNo)}" disabled></div>
-    <div class="field"><label>Email</label><input value="${esc(profile.email || me.email)}" disabled></div>
+    <div class="field"><label>Gender</label><select id="pGender"><option value="">—</option>${opt(["Male", "Female"], profile.gender)}</select></div>
+    <div class="field"><label>Date of birth</label><input id="pDob" type="date" value="${esc(profile.dob)}"></div>
     <div class="field"><label>Programme</label><input id="pCourse" value="${esc(profile.course)}"></div>
-    <div class="field"><label>Year of study</label><select id="pYear"><option value="">Select</option>${opt}</select></div>
-    <div class="field"><label>Emergency contact phone</label><input id="pEmerg" type="tel" value="${esc(profile.emergency)}"></div>
-    <div class="field"><label>About me</label><input id="pBio" maxlength="160" value="${esc(profile.bio)}" placeholder="A short line about you"></div></div></div>
-  <div class="panel"><h3>Social profiles</h3><p class="subtle" style="margin-top:-6px">Add your username or paste the full link. These buttons show on your profile.</p>
-    ${Object.entries(SOC).map(([k, v]) => `<div class="soc-field"><span class="ic" style="--c:${v[2]}"><i class="fa-brands ${v[1]}"></i></span><input data-soc="${k}" placeholder="${v[0]} — ${v[4]}" value="${esc(s[k])}"></div>`).join("")}
-    <button class="btn btn-primary" type="submit" style="margin-top:8px">Save profile</button></div></form>
-  <div class="panel"><h3>Verified accounts</h3><p class="subtle" style="margin-top:-6px">Connect your real account so you can also sign in with it.</p>
-  <div class="social-grid">${Object.entries(PROVIDERS).map(([id, [nm, ic, col]]) => { const l = linked[id]; return `<div class="social-card"><div class="nm"><span class="avatar" style="background:${col};color:#fff;width:34px;height:34px"><i class="fa-brands ${ic}"></i></span> ${nm}</div>
-    ${l ? `<small><span class="tag green">CONNECTED</span> ${esc(l.displayName || l.email || "")}</small><button class="btn btn-danger btn-sm" data-act="unlink" data-id="${id}">Disconnect</button>` : `<small>Not connected</small><button class="btn btn-light btn-sm" data-act="link" data-id="${id}">Connect</button>`}</div>`; }).join("")}</div></div>`);
-  $("pf").onsubmit = async e => {
+    <div class="field"><label>Year of study</label><select id="pYear"><option value="">—</option>${opt(["Year 1", "Year 2", "Year 3", "Year 4"], profile.year)}</select></div>
+    <div class="field"><label>Nationality</label><input id="pNat" value="${esc(profile.nationality)}"></div>
+    <div class="field"><label>Guardian / emergency phone</label><input id="pEmerg" type="tel" value="${esc(profile.emergency)}"></div>
+    <div class="field"><label>Guardian name</label><input id="pGName" value="${esc(profile.guardianName)}"></div>
+    <div class="field"><label>About me</label><input id="pBio" maxlength="160" value="${esc(profile.bio)}"></div></div>
+    <div class="row-btns" style="margin-top:8px"><button class="btn btn-primary" type="submit">Save changes</button><a class="btn btn-light" href="#/profile">Cancel</a></div></form></div></div>`;
+  const socCards = Object.entries(SOCIALS).map(([k, s]) => {
+    const on = (s.p && linked[s.p]) || profile.social?.[k];
+    const who = profile.social?.[k] || (s.p && linked[s.p] && (linked[s.p].displayName || linked[s.p].email)) || "";
+    const head = `<div class="nm"><span class="ic" style="--c:${s.c}"><i class="fa-brands ${s.i}"></i></span>${s.n}</div>`;
+    if (!on) return `<div class="soc-card" data-card="${k}">${head}<small>Not connected</small>${s.p ? `<button class="btn-brand" style="--c:${s.c}" data-act="oauth" data-k="${k}"><i class="fa-solid fa-link"></i> Log in &amp; connect</button>` : `<button class="btn-brand" style="--c:${s.c}" data-act="ext" data-k="${k}"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open ${s.n} &amp; connect</button>`}</div>`;
+    const url = socUrl(k, profile.social?.[k]);
+    return `<div class="soc-card" data-card="${k}">${head}<small><span class="tag green">CONNECTED</span> ${esc(who)}</small><div class="row-btns">${url ? `<a class="btn btn-light btn-sm" target="_blank" rel="noopener noreferrer" href="${esc(url)}">Open</a>` : ""}${s.b && !profile.social?.[k] ? `<button class="btn btn-light btn-sm" data-act="addhandle" data-k="${k}">Add profile link</button>` : ""}<button class="btn btn-danger btn-sm" data-act="unlink" data-k="${k}">Disconnect</button></div></div>`;
+  }).join("");
+  const tabs = `<div class="tabs-card"><div class="tabs">${[["academic", "Academic Details"], ["contact", "Contact & Guardian"], ["social", "Social Links"]].map(([id, t]) => `<button class="tab${profileTab === id ? " on" : ""}" data-tab="${id}">${t}</button>`).join("")}</div>
+    <div class="tabpane" data-pane="academic" ${profileTab !== "academic" ? "hidden" : ""}>
+      <div class="strip"><div><small style="color:#28a745">Reg. Number</small><b>${esc(profile.regNo || "—")}</b></div><div><small style="color:#e0a800">Year of Study</small><b>${esc(profile.year || "—")}</b></div><div><small style="color:#17a2b8">Modules</small><b>${n}</b></div><div><small style="color:#dc3545">Role</small><b>${esc(profile.role || "student")}</b></div></div>
+      <div class="two"><div><div class="info-row"><b><i class="fa-solid fa-book"></i> Programme</b><span>${esc((profile.course || "—").toUpperCase())}</span></div><div class="info-row"><b><i class="fa-solid fa-location-dot"></i> Institution</b><span>Dar es Salaam Institute of Technology</span></div></div>
+      <div><div class="scard" style="margin-bottom:12px"><div class="sicon" style="background:#325d73"><i class="fa-solid fa-book"></i></div><div><b>Modules</b><small>${n} registered</small></div></div><div class="scard"><div class="sicon" style="background:#dc3545"><i class="fa-solid fa-id-card"></i></div><div><b>Account Status</b><small>Active</small></div></div></div></div></div>
+    <div class="tabpane" data-pane="contact" ${profileTab !== "contact" ? "hidden" : ""}>
+      <div class="info-row"><b><i class="fa-solid fa-phone"></i> Phone</b><span>${esc(profile.phone || "—")}</span></div><div class="info-row"><b><i class="fa-solid fa-envelope"></i> Email</b><span>${esc(profile.email || me.email)}</span></div>
+      <div class="info-row"><b><i class="fa-solid fa-user-shield"></i> Guardian</b><span>${esc(profile.guardianName || "—")} ${esc(profile.emergency || "")}</span></div><div class="info-row"><b><i class="fa-solid fa-quote-left"></i> About me</b><span>${esc(profile.bio || "—")}</span></div></div>
+    <div class="tabpane" data-pane="social" ${profileTab !== "social" ? "hidden" : ""}><p class="subtle" style="margin-top:0">Press a button to open the app, log in to your own account and connect it to CampusHub.</p><div class="soc-grid">${socCards}</div></div></div>`;
+  view(`<div class="page-head"><h1><i class="fa-solid fa-users-viewfinder" style="color:var(--steel)"></i> Profile</h1>${edit && mode === "edit" ? "" : '<a class="btn btn-primary" href="#/profile/edit"><i class="fa-solid fa-pen"></i> Edit Profile</a>'}</div><div class="profile-grid">${left}${mode === "edit" ? edit : tabs}</div>`);
+  document.querySelectorAll("[data-tab]").forEach(t => t.onclick = () => { profileTab = t.dataset.tab; document.querySelectorAll("[data-tab]").forEach(x => x.classList.toggle("on", x === t)); document.querySelectorAll("[data-pane]").forEach(p => (p.hidden = p.dataset.pane !== profileTab)); });
+  if ($("pf")) $("pf").onsubmit = async e => {
     e.preventDefault();
-    const social = {}; document.querySelectorAll("[data-soc]").forEach(i => { if (i.value.trim()) social[i.dataset.soc] = i.value.trim(); });
-    const u = { fullName: $("pName").value.trim(), phone: $("pPhone").value.trim(), course: $("pCourse").value.trim(), year: $("pYear").value, emergency: $("pEmerg").value.trim(), bio: $("pBio").value.trim(), social };
+    const u = { fullName: $("pName").value.trim(), phone: $("pPhone").value.trim(), gender: $("pGender").value, dob: $("pDob").value, course: $("pCourse").value.trim(), year: $("pYear").value, nationality: $("pNat").value.trim(), emergency: $("pEmerg").value.trim(), guardianName: $("pGName").value.trim(), bio: $("pBio").value.trim() };
     if (!u.fullName) return toast("Name is required.", true);
-    try { await db.collection("students").doc(me.uid).update(u); profile = { ...profile, ...u }; $("topName").textContent = u.fullName; $("avatar").textContent = u.fullName[0].toUpperCase(); toast("Profile saved."); }
+    try { await db.collection("students").doc(me.uid).update(u); profile = { ...profile, ...u }; $("topName").textContent = u.fullName; $("avatar").textContent = u.fullName[0].toUpperCase(); toast("Profile saved."); location.hash = "#/profile"; }
     catch (err) { toast(friendly(err), true); }
   };
 }
@@ -251,7 +297,18 @@ document.addEventListener("click", async e => {
     } else if (act === "drop") {
       if (!confirm("Drop this module?")) return (b.disabled = false);
       await db.collection("moduleEnrollments").doc(me.uid + "_" + id).delete(); toast("Module dropped."); route();
-    } else if (act === "link") { await me.linkWithPopup(PROVIDERS[id][3]()); toast(PROVIDERS[id][0] + " connected."); route(); }
-    else if (act === "unlink") { await me.unlink(id); toast("Disconnected."); route(); }
+    } else if (act === "oauth") { await oauthLink(b.dataset.k); b.disabled = false; }
+    else if (act === "ext") { window.open(SOCIALS[b.dataset.k].login, "_blank", "noopener"); askHandle(b.dataset.k); }
+    else if (act === "addhandle") askHandle(b.dataset.k);
+    else if (act === "cancelsoc") route();
+    else if (act === "savesoc") { const v = $("socIn").value.trim(); if (!v) { toast("Enter your username or link first.", true); b.disabled = false; return; } await saveSocial(b.dataset.k, v); toast(SOCIALS[b.dataset.k].n + " connected."); route(); }
+    else if (act === "unlink") {
+      const k = b.dataset.k, s = SOCIALS[k];
+      if (!confirm("Disconnect " + s.n + "?")) return (b.disabled = false);
+      if (s.p && me.providerData.some(p => p.providerId === s.p)) await me.unlink(s.p);
+      await db.collection("students").doc(me.uid).update({ ["social." + k]: firebase.firestore.FieldValue.delete() });
+      if (profile.social) delete profile.social[k];
+      toast("Disconnected."); route();
+    }
   } catch (err) { toast(friendly(err), true); b.disabled = false; }
 });

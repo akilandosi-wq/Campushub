@@ -27,7 +27,7 @@ auth.onAuthStateChanged(async u => {
   route();
 });
 $("logoutBtn").onclick = () => auth.signOut();
-$("menuBtn").onclick = () => $("sidebar").classList.toggle("open");
+$("menuBtn").onclick = () => (innerWidth > 800 ? $("app").classList.toggle("mini") : $("sidebar").classList.toggle("open"));
 $("backBtn").onclick = () => (history.length > 1 ? history.back() : (location.hash = "#/dashboard"));
 window.addEventListener("hashchange", route);
 
@@ -40,7 +40,7 @@ function route() {
   const [page = "dashboard", ...arg] = location.hash.replace(/^#\/?/, "").split("/");
   const titles = { dashboard: "Dashboard", modules: "Modules", module: "Module", work: "Assignments & Tests", students: "My Students", users: "Manage Users" };
   $("pageTitle").textContent = titles[page] || "Dashboard";
-  document.querySelectorAll(".nav-btn[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === (page === "module" ? "modules" : page)));
+  document.querySelectorAll(".side-link[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === (page === "module" ? "modules" : page)));
   $("backBtn").style.visibility = page === "dashboard" ? "hidden" : "visible";
   $("sidebar").classList.remove("open"); window.scrollTo(0, 0);
   view('<div class="empty">Loading…</div>');
