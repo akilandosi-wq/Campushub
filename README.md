@@ -70,7 +70,7 @@ New self-registered accounts are always created as `student`. Only an existing a
 
 ## Security notes
 
-- Firebase web configuration (including the API key) is client-visible by design. It is not an authorization boundary. Restrict the key where practical and rely on Authentication, Firestore rules and Firebase project controls.
+- Supabase project URL and publishable key are client-visible by design. They are not authorization boundaries. Enforce access through Supabase Auth, PostgreSQL row-level security and Storage policies.
 - Never put service-account credentials or Admin SDK private keys in this repository or browser code.
 - Review [SECURITY.md](SECURITY.md) before using real student information.
 - The application is a static frontend; production use should add monitored backups, error reporting, automated tests and an appropriate privacy notice.
