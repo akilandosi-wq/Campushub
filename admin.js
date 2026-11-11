@@ -185,7 +185,7 @@ async function students() {
   enr.forEach(e => { (map[e.studentId] ||= { ...e, mods: [] }).mods.push(e.moduleName.split(" ")[0] + " " + (e.moduleName.split(" ")[1] || "")); });
   const all = Object.entries(map).map(([id, s]) => ({ id, ...s })).sort((a, b) => a.studentName.localeCompare(b.studentName));
   const rows = q => all.filter(s => (s.studentName + s.regNo).toLowerCase().includes(q.toLowerCase())).map(s => `<tr><td><a href="index.html#/student/${esc(s.id)}">${esc(s.studentName)}</a></td><td>${esc(s.regNo)}</td><td>${esc(s.phone)}</td><td>${esc(s.course)} ${esc(s.year)}</td><td>${s.mods.map(x => `<span class="tag">${esc(x)}</span>`).join(" ")}</td></tr>`).join("") || '<tr><td colspan="5" class="empty">No students found.</td></tr>';
-  view(head("My Students", `${all.length} student${all.length === 1 ? "" : "s"} registered in your modules.`) + `<div class="panel"><div class="toolbar"><input class="form-control" id="sq" placeholder="Search by name or reg no…"></div><div class="table-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Reg no</th><th>Phone</th><th>Programme</th><th>Modules</th></tr></thead><tbody id="srows">${rows("")}</tbody></table></div></div>`);
+  view(head(isAdmin() ? "All Students" : "My Students", `${all.length} student${all.length === 1 ? "" : "s"} registered in ${isAdmin() ? "the platform" : "your modules"}.`) + `<div class="panel"><div class="toolbar"><input class="form-control" id="sq" placeholder="Search by name or reg no…"></div><div class="table-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Reg no</th><th>Phone</th><th>Programme</th><th>Modules</th></tr></thead><tbody id="srows">${rows("")}</tbody></table></div></div>`);
   $("sq").oninput = e => { $("srows").innerHTML = rows(e.target.value); };
 }
 
