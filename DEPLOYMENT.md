@@ -1,51 +1,36 @@
-# Deployment and migration guide
+# CampusHub deployment and Supabase migration
 
-## Before deploying
+## Before switching production traffic
 
-1. Back up the existing Firestore database.
-2. Confirm that the Firebase project ID in `firebase-config.js` is the intended project.
-3. Ensure at least one trusted administrator account already exists. If no administrator exists, stop and establish one securely using a trusted server-side Firebase Admin SDK process. Do not make a student promote themselves.
-4. Review `firestore.rules` and test it against a non-production Firebase project first.
+1. Back up the existing Firebase Auth users, Firestore collections and Storage files.
+2. In the Supabase project configured in supabase-client.js, open SQL Editor and run supabase-schema.sql.
+3. Confirm the campushub_documents table exists and row-level security is enabled.
+4. Confirm the private campushub-notes bucket exists with a 20 MB PDF-only limit.
+5. Add the deployed website URL and local development URL to Supabase Authentication → URL Configuration.
+6. If instant sign-up is required, disable email confirmation in Supabase Authentication. If confirmation remains enabled, implement and test the email-confirmation profile completion flow before production.
+7. Verify that at least one trusted administrator account has been assigned the admin role using a trusted SQL Editor/admin process. Never expose role selection on public registration.
 
-## Deploy Firestore rules
+## Data and account migration
 
-Install the Firebase CLI and authenticate:
+Firebase accounts and passwords are not copied automatically. Export the Firebase users and data using a trusted server-side process, map the records into the campushub_documents table, and use a password-reset/invitation flow for users. Do not put Firebase Admin credentials or Supabase service-role keys in this repository or browser code.
 
-```bash
-npm install -g firebase-tools
-firebase login
-firebase use <YOUR_FIREBASE_PROJECT_ID>
-firebase deploy --only firestore:rules
-```
+Expected collection names include students, publicProfiles, modules, moduleEnrollments, work, notes and chatRooms. Nested chat messages use chatRooms/{roomId}/messages.
 
-This repository does not include a Firebase project alias. Select the project deliberately; do not assume the CLI's currently selected project is correct.
+PDF files belong in the private campushub-notes bucket at moduleNotes/{moduleId}/{filename}. The client requests short-lived signed download URLs after Supabase Storage authorizes the user.
 
-## Migrate existing public directory profiles
+## Validation checklist
 
-The application now separates private `students` records from directory-safe `publicProfiles` records. Existing accounts need a one-time migration:
-
-1. Deploy the new rules.
-2. Sign in to the staff portal using an administrator account.
-3. Open **Manage Users**.
-4. Click **Sync public profiles** and wait for the success notification.
-
-This copies only full name, programme, year, bio and social links. It does not copy phone, email, registration number, date of birth or guardian information.
-
-New registrations create their public profile automatically. Existing users also refresh their own public profile on next sign-in.
-
-## Validate after deployment
-
-- Register a test student and verify the private and public profile documents are created.
-- Sign in as that student and confirm the directory and own profile work.
-- Confirm one student cannot read another student's `students/{uid}` document.
-- Confirm one student cannot change their role, programme, year or registration number.
-- Confirm students can only enrol themselves in real modules and cannot forge a lecturer ID.
-- Confirm a lecturer can manage only their own modules, work and enrolment roster.
-- Confirm an administrator can manage users and modules as intended.
-- Test general chat, same-course chat and a direct message between two accounts; verify a third account cannot read the DM.
-- Verify public profiles contain no private contact or guardian fields.
-- Check existing course chat history. The app retains the previous normalized room ID and writes course metadata when a member opens the class room, allowing existing message history to remain available while access is checked against the member's private programme record.
+- Register a test student and verify their students and publicProfiles records are created.
+- Sign in and sign out, reset a password, and test the chosen email-confirmation setting.
+- Verify a student cannot read another student's private record or promote their own role.
+- Verify a teacher can create and manage only their own modules, work and notes.
+- Verify a student can see/download notes only for modules they are enrolled in.
+- Verify non-PDF files and files larger than 20 MB are rejected.
+- Verify admin, teacher and student route separation.
+- Verify general chat, course chat and direct messages; a third account must not read a DM.
+- Test notes deletion and confirm both the storage object and metadata are removed.
+- Test on a staging Supabase project before switching production traffic.
 
 ## Rollback
 
-If an essential workflow fails, restore the previously backed-up rules and application commit together. Do not leave the database with open rules as a workaround. Diagnose the failing rule/query in the Firebase Emulator Suite before re-deploying.
+Keep the previous site release and Firebase backups until Supabase login, database access, notes upload/download and chat have been verified. Roll back the website and restore from backups if critical workflows fail. Do not disable row-level security to work around permission errors.
