@@ -56,7 +56,10 @@ service cloud.firestore {
     // date-of-birth, or guardian details in this collection.
     match /publicProfiles/{uid} {
       allow read: if signed();
-      allow create: if own(uid) || admin();
+      allow create: if (own(uid) || admin())
+        && request.resource.data.keys().hasOnly([
+          'fullName', 'course', 'year', 'bio', 'social'
+        ]);
       allow update: if (own(uid) || admin())
         && request.resource.data.keys().hasOnly([
           'fullName', 'course', 'year', 'bio', 'social'
@@ -115,9 +118,9 @@ service cloud.firestore {
     match /work/{workId} {
       allow read: if signed();
       allow create: if staff()
-        && request.resource.data.teacherId == request.auth.uid
         && exists(/databases/$(database)/documents/modules/$(request.resource.data.moduleId))
-        && get(/databases/$(database)/documents/modules/$(request.resource.data.moduleId)).data.teacherId == request.auth.uid
+        && request.resource.data.teacherId == get(/databases/$(database)/documents/modules/$(request.resource.data.moduleId)).data.teacherId
+        && (admin() || get(/databases/$(database)/documents/modules/$(request.resource.data.moduleId)).data.teacherId == request.auth.uid)
         && request.resource.data.keys().hasOnly([
           'moduleId', 'moduleName', 'type', 'title', 'date',
           'details', 'link', 'teacherId', 'createdAt'
@@ -146,7 +149,12 @@ service cloud.firestore {
         && request.resource.data.participants.size() == 2
         && request.resource.data.participants.hasAny([request.auth.uid])
         && roomId == request.resource.data.participants[0] + '_' + request.resource.data.participants[1];
-      allow update, delete: if false;
+      allow update: if signed()
+        && resource.data.type == 'dm'
+        && request.resource.data.type == resource.data.type
+        && request.resource.data.participants == resource.data.participants
+        && request.resource.data.keys().hasOnly(['type', 'participants', 'updatedAt']);
+      allow delete: if false;
 
       match /messages/{messageId} {
         function roomAllowed() {
