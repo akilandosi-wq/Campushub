@@ -94,11 +94,21 @@ function applyUpdate(target, patch) {
   return out;
 }
 class Query {
-  constructor(name, id) { this.name = name; this.id = id || null; this.filters = []; this.max = null; this.sort = null; }
+  constructor(name, id) { this.name = name; this.id = id || null; this.filters = []; this.max = null; this.sort = null; this.last = false; }
   where(field, op, value) { const q = this.copy(); q.filters.push({ field, op, value }); return q; }
   limit(n) { const q = this.copy(); q.max = n; return q; }
   orderBy(field, direction) { const q = this.copy(); q.sort = { field, direction: direction || "asc" }; return q; }
-  copy() { const q = new Query(this.name, this.id); q.filters = this.filters.slice(); q.max = this.max; q.sort = this.sort; return q; }
+  limitToLast(n) { const q = this.copy(); q.max = n; q.last = true; return q; }
+  onSnapshot(callback, onError) {
+    let active = true;
+    const refresh = async () => { try { const snap = await this.get(); if (active) callback(snap); } catch (e) { if (active && onError) onError(e); } };
+    refresh();
+    const channel = sb.channel("campushub-" + this.name + "-" + crypto.randomUUID())
+      .on("postgres_changes", { event: "*", schema: "public", table: "campushub_documents", filter: "collection_name=eq." + this.name }, refresh)
+      .subscribe();
+    return () => { active = false; sb.removeChannel(channel); };
+  }
+  copy() { const q = new Query(this.name, this.id); q.filters = this.filters.slice(); q.max = this.max; q.sort = this.sort; q.last = this.last; return q; }
   doc(id) { return new DocumentRef(this.name, id); }
   async get() {
     let request = sb.from("campushub_documents").select("id,data").eq("collection_name", this.name);
@@ -117,7 +127,7 @@ class Query {
         return (av > bv ? 1 : av < bv ? -1 : 0) * (direction === "desc" ? -1 : 1);
       });
     }
-    if (this.max != null) rows = rows.slice(0, this.max);
+    if (this.max != null) rows = this.last ? rows.slice(-this.max) : rows.slice(0, this.max);
     const docs = rows.map(row => new Snapshot(row));
     return { docs, size: docs.length, empty: !docs.length, forEach: fn => docs.forEach(fn) };
   }
