@@ -93,6 +93,13 @@ begin
 end;
 $$;
 
+-- Supabase table privileges (RLS policies still enforce row-level access).
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on table public.campushub_documents to authenticated;
+grant execute on function public.campushub_role() to authenticated;
+grant execute on function public.campushub_can_read(text, text, jsonb) to authenticated;
+grant execute on function public.campushub_can_write(text, text, jsonb) to authenticated;
+
 alter table public.campushub_documents enable row level security;
 drop policy if exists "CampusHub read access" on public.campushub_documents;
 drop policy if exists "CampusHub insert access" on public.campushub_documents;
