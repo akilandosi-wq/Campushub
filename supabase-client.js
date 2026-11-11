@@ -78,7 +78,7 @@ const firebase = {
   })
 };
 class Snapshot {
-  constructor(row) { this.id = row.id; this.exists = !!row; this._data = row ? row.data : undefined; }
+  constructor(row) { this.id = row?.id ?? null; this.exists = !!row; this._data = row ? row.data : undefined; }
   data() { return this._data; }
 }
 function clone(value) { return value == null ? value : JSON.parse(JSON.stringify(value)); }
