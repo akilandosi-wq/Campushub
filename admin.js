@@ -6,11 +6,11 @@ const isAdmin = () => profile.role === "admin";
 const portalRole = document.body.dataset.portal || "admin";
 const view = h => { $("view").innerHTML = h; };
 const head = (t, p) => `<div class="page-head"><h1>${t}</h1><p>${p}</p></div>`;
-const ms = t => (t && t.toMillis ? t.toMillis() : 0);
+const ms = t => (t ? new Date(t).getTime() : 0);
 const safeUrl = u => (/^https?:\/\//i.test(u || "") ? esc(u) : "");
 const col = n => db.collection(n);
 function toast(m, err) { const t = $("toast"); t.textContent = m; t.className = "toast show" + (err ? " err" : ""); clearTimeout(t._t); t._t = setTimeout(() => (t.className = "toast"), 3800); }
-const fail = e => toast(e.code === "permission-denied" ? "Permission denied. Publish the latest firestore.rules in Firebase Console." : e.message, true);
+const fail = e => toast(e.code === "permission-denied" ? "Permission denied. Check the Supabase SQL policies and user role." : e.message, true);
 
 auth.onAuthStateChanged(async u => {
   if (!u) return location.replace("index.html");
