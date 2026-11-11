@@ -1,33 +1,24 @@
-# Security review and operating guidance
+# CampusHub security guidance
 
-## Changes in this branch
+## Supabase controls
 
-- Restores a restrictive Firestore rules file in the repository.
-- Restricts private `students` documents to their owner and administrators.
-- Adds `publicProfiles` for directory-safe information.
-- Prevents self-service role escalation and locks registration number, programme and year from student edits.
-- Validates enrolment ownership against the referenced module and the signed-in student's profile.
-- Restricts lecturer writes to modules and academic work they own; administrators can administer the wider system.
-- Restricts course chat to the matching course and direct messages to the two participants.
-- Limits message creation to the authenticated sender and a maximum 1,000-character message.
-- Adds a one-time administrator migration action for existing public directory profiles.
+- Supabase Auth identifies users; the campushub_documents table stores application records as JSONB.
+- Row-level security is enabled on campushub_documents and policies separate private student records, public directory profiles, module ownership, enrolments, work, notes and chat rooms.
+- New public registrations are student-only. A student cannot change their own role through the client.
+- Teacher writes are restricted to modules they own. Notes and published work are checked against module ownership.
+- The campushub-notes Storage bucket is private, accepts PDF files up to 20 MB, and uses RLS to limit uploads, downloads and deletion.
+- Download links are signed and short-lived. Do not make the notes bucket public.
+- General chat is available to authenticated users; course chat is checked against the student's programme; direct messages are limited to the participants.
 
-## Important limitations and decisions
+## Secrets and privacy
 
-1. **Published work visibility:** signed-in users can read all published work. This is deliberate in this iteration because Firestore rules are not query filters, and the existing student client queries work by module ID without a rule-provable enrolment filter. To make work private to enrolled students, introduce a server-mediated read path or a student-specific materialized work collection, then update the client and rules together.
-2. **Enrolment roster metadata:** the enrolment document contains registration number and phone so the assigned lecturer can manage a class roster. Only the student, the lecturer recorded on the enrolment, and administrators can read it. Review whether lecturers should see phone numbers before production.
-3. **Course identity:** class-room membership currently relies on the course string in the student's private profile. Keep programme values normalized and consistent. A future version should use immutable course IDs and explicit membership records.
-4. **No automated runtime verification:** this is a static source change. Run the Firebase Emulator Suite and the manual checks in [DEPLOYMENT.md](DEPLOYMENT.md) before production.
-5. **Existing data:** the public-profile migration is a one-time administrator action. Back up Firestore before running it.
-6. **Admin bootstrap:** administrator creation must be performed through a trusted process. Never expose an admin registration option in the public client.
+- The Supabase project URL and publishable key are intended for browser use. Never expose a Supabase secret/service-role key.
+- Do not commit service-role keys, database passwords, Firebase Admin credentials, or exported student data.
+- Keep phone, email, registration number, date of birth and guardian/emergency details in private student records, not publicProfiles.
+- Assign the initial administrator role only through a trusted Supabase SQL Editor/admin process.
+- Back up the database and Storage objects and test restoration.
+- Publish a privacy notice and establish account deletion, data correction, retention and incident-response procedures.
 
-## Operational checklist
+## Known migration constraints
 
-- Restrict Firebase API key usage to expected websites/APIs where compatible with Firebase services.
-- Configure authorized authentication domains.
-- Enable Firebase App Check after validating the chosen web provider and rollout strategy.
-- Set budget alerts and monitor Authentication/Firestore usage.
-- Schedule and test Firestore backups.
-- Establish a process for account removal, student record correction, incident response and data retention.
-- Publish a privacy notice explaining which profile fields are public and which are private.
-- Keep dependencies/CDN versions reviewed and pinned; add a Content Security Policy appropriate to the deployed domains.
+Firebase users/passwords and existing records are not migrated automatically by the frontend code. Use a trusted export/import process and require password reset/invitation for migrated users. The SQL schema must be run in the intended Supabase project before the new frontend is used.
