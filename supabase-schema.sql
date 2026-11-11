@@ -1,0 +1,112 @@
+-- CampusHub Supabase schema. Run this once in Supabase SQL Editor.
+create extension if not exists pgcrypto;
+
+create table if not exists public.campushub_documents (
+  collection_name text not null,
+  id text not null,
+  data jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (collection_name, id)
+);
+
+create or replace function public.campushub_role()
+returns text language sql stable security definer set search_path = public
+as $$
+  select coalesce((select data->>'role' from public.campushub_documents
+    where collection_name = 'students' and id = auth.uid()::text limit 1), 'student');
+$$;
+
+create or replace function public.campushub_can_read(c text, rid text, d jsonb)
+returns boolean language plpgsql stable security definer set search_path = public
+as $$
+declare role_name text := public.campushub_role();
+begin
+  if auth.uid() is null then return false; end if;
+  if role_name = 'admin' then return true; end if;
+  if c = 'students' then return rid = auth.uid()::text; end if;
+  if c = 'publicProfiles' or c = 'modules' then return true; end if;
+  if c = 'moduleEnrollments' then
+    return d->>'studentId' = auth.uid()::text or d->>'teacherId' = auth.uid()::text;
+  end if;
+  if c = 'work' then
+    return d->>'teacherId' = auth.uid()::text or exists (
+      select 1 from public.campushub_documents e
+      where e.collection_name = 'moduleEnrollments'
+        and e.data->>'moduleId' = d->>'moduleId'
+        and e.data->>'studentId' = auth.uid()::text
+    );
+  end if;
+  if c = 'notes' then
+    return d->>'teacherId' = auth.uid()::text or exists (
+      select 1 from public.campushub_documents e
+      where e.collection_name = 'moduleEnrollments'
+        and e.data->>'moduleId' = d->>'moduleId'
+        and e.data->>'studentId' = auth.uid()::text
+    );
+  end if;
+  if c like 'chatRooms/%' then return true; end if;
+  if c = 'chatRooms' then return true; end if;
+  return false;
+end;
+$$;
+
+create or replace function public.campushub_can_write(c text, rid text, d jsonb)
+returns boolean language plpgsql stable security definer set search_path = public
+as $$
+declare role_name text := public.campushub_role();
+begin
+  if auth.uid() is null then return false; end if;
+  if role_name = 'admin' then return true; end if;
+  if c = 'students' then return rid = auth.uid()::text; end if;
+  if c = 'publicProfiles' then return rid = auth.uid()::text; end if;
+  if c = 'modules' then return d->>'teacherId' = auth.uid()::text; end if;
+  if c = 'moduleEnrollments' then return d->>'studentId' = auth.uid()::text or d->>'teacherId' = auth.uid()::text; end if;
+  if c = 'work' or c = 'notes' then return d->>'teacherId' = auth.uid()::text; end if;
+  if c like 'chatRooms/%' then return d->>'senderId' = auth.uid()::text or d->>'type' in ('course','dm','general'); end if;
+  if c = 'chatRooms' then return true; end if;
+  return false;
+end;
+$$;
+
+alter table public.campushub_documents enable row level security;
+drop policy if exists "CampusHub read access" on public.campushub_documents;
+drop policy if exists "CampusHub insert access" on public.campushub_documents;
+drop policy if exists "CampusHub update access" on public.campushub_documents;
+drop policy if exists "CampusHub delete access" on public.campushub_documents;
+create policy "CampusHub read access" on public.campushub_documents
+for select to authenticated using (public.campushub_can_read(collection_name,id,data));
+create policy "CampusHub insert access" on public.campushub_documents
+for insert to authenticated with check (public.campushub_can_write(collection_name,id,data));
+create policy "CampusHub update access" on public.campushub_documents
+for update to authenticated using (public.campushub_can_read(collection_name,id,data))
+with check (public.campushub_can_write(collection_name,id,data));
+create policy "CampusHub delete access" on public.campushub_documents
+for delete to authenticated using (public.campushub_can_write(collection_name,id,data));
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('campushub-notes','campushub-notes',false,20971520,array['application/pdf'])
+on conflict (id) do update set public=false, file_size_limit=20971520, allowed_mime_types=array['application/pdf'];
+
+drop policy if exists "CampusHub notes read" on storage.objects;
+drop policy if exists "CampusHub notes upload" on storage.objects;
+drop policy if exists "CampusHub notes delete" on storage.objects;
+create policy "CampusHub notes read" on storage.objects for select to authenticated
+using (bucket_id = 'campushub-notes' and (
+  (storage.foldername(name))[1] = 'moduleNotes'
+  and (
+    public.campushub_role() = 'admin'
+    or exists (select 1 from public.campushub_documents n
+      where n.collection_name = 'notes' and n.data->>'storagePath' = name
+      and public.campushub_can_read('notes',n.id,n.data))
+  )
+));
+create policy "CampusHub notes upload" on storage.objects for insert to authenticated
+with check (bucket_id = 'campushub-notes' and (storage.foldername(name))[1] = 'moduleNotes');
+create policy "CampusHub notes delete" on storage.objects for delete to authenticated
+using (bucket_id = 'campushub-notes' and (
+  public.campushub_role() = 'admin'
+  or exists (select 1 from public.campushub_documents n
+    where n.collection_name = 'notes' and n.data->>'storagePath' = name
+    and n.data->>'teacherId' = auth.uid()::text)
+));
