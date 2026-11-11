@@ -3,7 +3,7 @@ let me = null, profile = {}, unsub = null, signingUp = false, regMode = false, n
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const isStaff = () => ["teacher", "admin"].includes(profile.role);
-const slug = s => "course_" + String(s || "general").trim();
+const slug = s => "course_" + String(s || "general").toLowerCase().replace(/[^a-z0-9]+/g, "_");
 const publicProfileData = p => ({ fullName: p.fullName || "", course: p.course || "", year: p.year || "", bio: p.bio || "", social: p.social || {} });
 const view = html => { $("view").innerHTML = html; };
 const head = (t, p) => `<div class="page-head"><h1>${t}</h1><p>${p}</p></div>`;
@@ -249,7 +249,10 @@ async function workPage() {
 async function chatPage(arg) {
   const tok = navTok, [kind, other] = arg, inRoom = !!kind;
   let room = "general", title = "General room — all students";
-  if (kind === "class") { room = slug(profile.course); title = (profile.course || "My class") + " — class room"; }
+  if (kind === "class") {
+    room = slug(profile.course); title = (profile.course || "My class") + " — class room";
+    await db.collection("chatRooms").doc(room).set({ type: "course", course: profile.course }, { merge: true });
+  }
   if (kind === "dm" && other) {
     room = [me.uid, other].sort().join("_");
     await db.collection("chatRooms").doc(room).set({ type: "dm", participants: [me.uid, other].sort(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
