@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CampusHub 3.0</title>
 <link rel="stylesheet" href="styles.css">
-
 </head>
 <body>
 
@@ -13,7 +12,7 @@
   <div class="auth-card">
     <div class="logo">CH</div>
     <p class="brand">CAMPUSHUB 3.0</p>
-    <h1 id="authTitle">Welcome back</h1>
+    <h1 id="authTitle">Welcome Back</h1>
     <p class="sub">Your academic life, all in one place.</p>
 
     <form id="authForm">
@@ -47,12 +46,12 @@
       <label>Password</label>
       <input id="password" type="password" required minlength="6" placeholder="Password">
 
-      <button class="main-btn" id="submitBtn">Sign in</button>
+      <button class="main-btn" id="submitBtn" type="submit">Login</button>
     </form>
 
     <p class="switch">
       <span id="switchText">Don't have an account?</span>
-      <button id="switchBtn" type="button">Create account</button>
+      <button id="switchBtn" type="button">Register</button>
     </p>
 
     <p id="authMessage"></p>
@@ -95,6 +94,7 @@
     <section id="pageContent"></section>
   </main>
 </div>
+
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
