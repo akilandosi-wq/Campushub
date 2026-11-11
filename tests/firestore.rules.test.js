@@ -111,6 +111,37 @@ describe("CampusHub Firestore security rules", function () {
     }));
   });
 
+  it("allows an enrolled student to read module notes but blocks an unregistered student", async () => {
+    await seed("students/teacher1", { fullName: "Teacher One", role: "teacher" });
+    await seed("modules/networks", { code: "CE101", name: "Networks", teacherId: "teacher1" });
+    await seed("moduleEnrollments/alice_networks", {
+      studentId: "alice", moduleId: "networks", teacherId: "teacher1"
+    });
+    await seed("notes/note1", {
+      moduleId: "networks", moduleName: "CE101 Networks", title: "Chapter 1",
+      fileName: "chapter1.pdf", storagePath: "moduleNotes/networks/chapter1.pdf",
+      contentType: "application/pdf", size: 1200, teacherId: "teacher1",
+      createdAt: new Date()
+    });
+    const alice = testEnv.authenticatedContext("alice").firestore();
+    const bob = testEnv.authenticatedContext("bob").firestore();
+    await assertSucceeds(getDoc(doc(alice, "notes/note1")));
+    await assertFails(getDoc(doc(bob, "notes/note1")));
+  });
+
+  it("allows only the module's lecturer to publish notes", async () => {
+    await seed("students/teacher1", { fullName: "Teacher One", role: "teacher" });
+    await seed("students/teacher2", { fullName: "Teacher Two", role: "teacher" });
+    await seed("modules/networks", { code: "CE101", name: "Networks", teacherId: "teacher2" });
+    const db = testEnv.authenticatedContext("teacher1").firestore();
+    await assertFails(setDoc(doc(db, "notes/forged"), {
+      moduleId: "networks", moduleName: "CE101 Networks", title: "Forged notes",
+      fileName: "notes.pdf", storagePath: "moduleNotes/networks/forged.pdf",
+      contentType: "application/pdf", size: 1200, teacherId: "teacher1",
+      createdAt: serverTimestamp()
+    }));
+  });
+
   it("blocks non-participants from reading direct messages", async () => {
     await seed("chatRooms/alice_bob", {
       type: "dm", participants: ["alice", "bob"]
