@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "moduleEnrollments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "moduleId", "order": "ASCENDING" },
+        { "fieldPath": "teacherId", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
