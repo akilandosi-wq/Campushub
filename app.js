@@ -51,11 +51,12 @@ $("authForm").addEventListener("submit", async e => {
       if (!p.fullName || !p.phone || !p.regNo || !p.course || !p.year) throw { message: "Fill in all registration details." };
       signingUp = true;
       const r = await auth.createUserWithEmailAndPassword(email, password);
-      const batch = db.batch();
-      batch.set(db.collection("students").doc(r.user.uid), { ...p, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
-      batch.set(db.collection("publicProfiles").doc(r.user.uid), publicProfileData(p));
-      await batch.commit();
+      await db.collection("students").doc(r.user.uid).set({ ...p, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
       me = r.user; profile = p; authMsg(""); enter();
+      // Create the directory-safe profile in the background. Firestore rules
+      // validate it against the already-created private student record.
+      db.collection("publicProfiles").doc(r.user.uid).set(publicProfileData(p))
+        .catch(err => toast("Account created. Profile directory sync will retry later: " + friendly(err), true));
     } else await auth.signInWithEmailAndPassword(email, password);
   } catch (err) { authMsg(friendly(err)); }
   finally { signingUp = false; $("submitBtn").disabled = false; }
