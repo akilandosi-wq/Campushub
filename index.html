@@ -3,97 +3,76 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CampusHub 3.0</title>
+<meta name="theme-color" content="#073b66">
+<title>CampusHub | Student Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-<div id="authPage" class="auth-page">
-  <div class="auth-card">
-    <div class="logo">CH</div>
-    <p class="brand">CAMPUSHUB 3.0</p>
-    <h1 id="authTitle">Welcome Back</h1>
-    <p class="sub">Your academic life, all in one place.</p>
+<section id="authScreen" class="auth-shell hidden">
+  <div class="auth-brand">
+    <div class="brand-mark"><i class="fa-solid fa-graduation-cap"></i> CampusHub</div>
+    <div class="brand-copy">
+      <span class="eyebrow">Student Portal</span>
+      <h1>Your studies, your classmates, your lecturers. One place.</h1>
+      <p>Register for your modules, follow assignments and tests, and chat with your class from any phone or computer.</p>
+    </div>
+    <div class="brand-foot">© CampusHub</div>
+  </div>
+  <div class="auth-side">
+    <div class="auth-card">
+      <h2 id="authTitle">Sign in</h2>
+      <p class="subtle" id="authSub">Use your email and password to continue.</p>
+      <form id="authForm" novalidate>
+        <div id="regFields" class="hidden">
+          <div class="field"><label for="fullName">Full name</label><input id="fullName" autocomplete="name"></div>
+          <div class="form-grid">
+            <div class="field"><label for="phone">Phone number</label><input id="phone" type="tel" placeholder="+255 7XX XXX XXX" autocomplete="tel"></div>
+            <div class="field"><label for="regNo">Registration number</label><input id="regNo"></div>
+          </div>
+          <div class="form-grid">
+            <div class="field"><label for="course">Programme</label><input id="course" placeholder="e.g. Computer Engineering"></div>
+            <div class="field"><label for="year">Year of study</label>
+              <select id="year"><option value="">Select</option><option>Year 1</option><option>Year 2</option><option>Year 3</option><option>Year 4</option></select></div>
+          </div>
+        </div>
+        <div class="field"><label for="email">Email address</label><input id="email" type="email" autocomplete="email"></div>
+        <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password"></div>
+        <button class="btn btn-primary btn-block" id="submitBtn" type="submit">Sign in</button>
+      </form>
+      <p class="switch"><span id="switchText">New student?</span> <button id="switchBtn" type="button">Create account</button></p>
+      <p id="authMsg" class="notice"></p>
+    </div>
+  </div>
+</section>
 
-    <form id="authForm">
-      <div id="registerFields" class="hidden">
-        <label>Full name</label>
-        <input id="fullName" placeholder="Your full name">
-
-        <label>Phone number</label>
-        <input id="phone" type="tel" placeholder="+255...">
-
-        <label>Registration number</label>
-        <input id="regNo" placeholder="Registration number">
-
-        <label>Course / Programme</label>
-        <input id="course" placeholder="Your programme">
-
-        <label>Year of study</label>
-        <select id="year">
-          <option value="">Select year</option>
-          <option>Year 1</option>
-          <option>Year 2</option>
-          <option>Year 3</option>
-          <option>Year 4</option>
-          <option>Year 5</option>
-        </select>
-      </div>
-
-      <label>Email address</label>
-      <input id="email" type="email" required placeholder="Email address">
-
-      <label>Password</label>
-      <input id="password" type="password" required minlength="6" placeholder="Password">
-
-      <button class="main-btn" id="submitBtn" type="submit">Login</button>
-    </form>
-
-    <p class="switch">
-      <span id="switchText">Don't have an account?</span>
-      <button id="switchBtn" type="button">Register</button>
-    </p>
-
-    <p id="authMessage"></p>
+<div id="app" class="app hidden">
+  <header class="topbar">
+    <div class="top-left">
+      <button class="icon-btn mobile-menu" id="menuBtn" aria-label="Menu"><i class="fa-solid fa-bars"></i></button>
+      <button class="icon-btn" id="backBtn" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+      <div class="top-title"><strong id="pageTitle">Overview</strong><span id="roleLabel">Student portal</span></div>
+    </div>
+    <a class="top-user" href="#/profile"><span class="user-name" id="topName"></span><span class="avatar" id="avatar">S</span></a>
+  </header>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="nav-label">MENU</div>
+      <a class="nav-btn" data-page="home" href="#/home"><i class="fa-solid fa-table-cells-large"></i> Overview</a>
+      <a class="nav-btn" data-page="modules" href="#/modules"><i class="fa-solid fa-book-open"></i> Modules</a>
+      <a class="nav-btn" data-page="work" href="#/work"><i class="fa-solid fa-list-check"></i> Assignments &amp; Tests</a>
+      <a class="nav-btn" data-page="chat" href="#/chat"><i class="fa-solid fa-comments"></i> Chat</a>
+      <a class="nav-btn" data-page="profile" href="#/profile"><i class="fa-solid fa-user"></i> My Profile</a>
+      <div class="sidebar-bottom"><button class="nav-btn" id="logoutBtn"><i class="fa-solid fa-right-from-bracket"></i> Sign out</button></div>
+    </aside>
+    <main class="main"><div id="view"></div></main>
   </div>
 </div>
-
-<div id="portal" class="hidden">
-  <aside class="sidebar" id="sidebar">
-    <div class="side-logo">CH <span>CampusHub</span></div>
-
-    <div class="student-mini">
-      <div class="avatar" id="avatar">S</div>
-      <div>
-        <b id="studentName">Student</b>
-        <small id="studentCourse">Student portal</small>
-      </div>
-    </div>
-
-    <nav>
-      <button onclick="showPage('home')">▦ Overview</button>
-      <button onclick="showPage('profile')">◉ My Profile</button>
-      <button onclick="showPage('modules')">▤ My Modules</button>
-      <button onclick="showPage('work')">✓ Assignments & Tests</button>
-      <button onclick="showPage('chat')">◌ Class Chat</button>
-    </nav>
-
-    <button class="logout" onclick="logout()">Sign out</button>
-  </aside>
-
-  <main class="main">
-    <header>
-      <button class="menu" onclick="toggleMenu()">☰</button>
-      <div>
-        <small>STUDENT PORTAL</small>
-        <h2 id="pageTitle">Overview</h2>
-      </div>
-      <span class="secure">● Secure</span>
-    </header>
-
-    <section id="pageContent"></section>
-  </main>
-</div>
+<div id="toast" class="toast"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
