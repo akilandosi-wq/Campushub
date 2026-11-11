@@ -5,8 +5,5 @@
   "description": "CampusHub Supabase-backed campus portal",
   "scripts": {
     "check": "node --check supabase-client.js && node --check app.js && node --check admin.js"
-  },
-  "devDependencies": {
-    "mocha": "^10.8.2"
   }
 }
