@@ -229,9 +229,9 @@ document.addEventListener("click", async e => {
         col("notes").where("moduleId", "==", id).get()
       ]);
       await Promise.all([
-        ...enrollments.docs.map(d => d.ref.update({ teacherId: teacher.id })),
-        ...workItems.docs.map(d => d.ref.update({ teacherId: teacher.id })),
-        ...notesItems.docs.map(d => d.ref.update({ teacherId: teacher.id }))
+        ...enrollments.docs.map(d => col("moduleEnrollments").doc(d.id).update({ teacherId: teacher.id })),
+        ...workItems.docs.map(d => col("work").doc(d.id).update({ teacherId: teacher.id })),
+        ...notesItems.docs.map(d => col("notes").doc(d.id).update({ teacherId: teacher.id }))
       ]);
       toast("Lecturer assigned. Existing module records were transferred.");
       route();
