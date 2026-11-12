@@ -96,6 +96,15 @@ begin
     return (d->>'studentId' = auth.uid()::text or d->>'teacherId' = auth.uid()::text)
       and exists (select 1 from public.campushub_documents m where m.collection_name = 'modules' and m.id = d->>'moduleId' and m.data->>'teacherId' = d->>'teacherId');
   end if;
+  if c = 'timetable' then
+    return d->>'teacherId' = auth.uid()::text
+      and exists (
+        select 1 from public.campushub_documents m
+        where m.collection_name = 'modules'
+          and m.id = d->>'moduleId'
+          and m.data->>'teacherId' = auth.uid()::text
+      );
+  end if;
   if c = 'results' then
     return d->>'teacherId' = auth.uid()::text
       and d->>'status' in ('submitted','returned')
