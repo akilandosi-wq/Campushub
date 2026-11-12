@@ -136,7 +136,7 @@ const SOCIALS = {
   whatsapp: { n: "WhatsApp", i: "fa-whatsapp", c: "#25D366", login: "https://web.whatsapp.com/", b: v => "https://wa.me/" + v.replace(/\D/g, ""), ph: "your number e.g. 2557XXXXXXXX", raw: 1 },
   youtube: { n: "YouTube", i: "fa-youtube", c: "#FF0000", login: "https://accounts.google.com/ServiceLogin?service=youtube", b: v => "https://youtube.com/@" + v, ph: "your channel name" }
 };
-const socUrl = (k, v) => { v = String(v || "").trim(); const s = SOCIALS[k]; if (!v || !s?.b) return ""; if (/^https?:\/\//i.test(v)) return v; return s.b(s.raw ? v : encodeURIComponent(v.replace(/^@/, ""))); };
+const socUrl = (k, v) => { v = String(v || "").trim(); const s = SOCIALS[k]; if (!v || !s) return ""; if (/^https?:\/\//i.test(v)) return v; if (!s.b) return ""; return s.b(s.raw ? v : encodeURIComponent(v.replace(/^@/, ""))); };
 const socButtons = soc => Object.keys(SOCIALS).filter(k => soc?.[k] && socUrl(k, soc[k])).map(k => `<a class="soc" style="--c:${SOCIALS[k].c}" target="_blank" rel="noopener noreferrer" href="${esc(socUrl(k, soc[k]))}"><i class="fa-brands ${SOCIALS[k].i}"></i> ${SOCIALS[k].n}</a>`).join("");
 async function saveSocial(k, val) {
   await db.collection("students").doc(me.uid).update({ ["social." + k]: val });
@@ -161,8 +161,8 @@ async function afterLink(k, r) {
 }
 function askHandle(k) {
   const card = document.querySelector(`[data-card="${k}"]`); if (!card) return;
-  const s = SOCIALS[k];
-  card.innerHTML = `<div class="nm"><span class="ic" style="--c:${s.c}"><i class="fa-brands ${s.i}"></i></span>${s.n}</div><small>Enter your ${esc(s.ph)} to connect this profile.</small><input id="socIn" placeholder="${esc(s.ph)}"><div class="row-btns"><button class="btn-brand" style="--c:${s.c}" data-act="savesoc" data-k="${k}">Connect</button><button class="btn btn-light btn-sm" data-act="cancelsoc">Cancel</button></div>`;
+  const s = SOCIALS[k], placeholder = s.ph || "profile link";
+  card.innerHTML = `<div class="nm"><span class="ic" style="--c:${s.c}"><i class="fa-brands ${s.i}"></i></span>${s.n}</div><small>Enter your ${esc(placeholder)} to connect this profile.</small><input id="socIn" placeholder="${esc(placeholder)}"><div class="row-btns"><button class="btn-brand" style="--c:${s.c}" data-act="savesoc" data-k="${k}">Connect</button><button class="btn btn-light btn-sm" data-act="cancelsoc">Cancel</button></div>`;
   $("socIn").focus();
 }
 
@@ -205,10 +205,8 @@ async function profilePage([mode]) {
     const who = profile.social?.[k] || (s.p && linked[s.p] && (linked[s.p].displayName || linked[s.p].email)) || "";
     const head = `<div class="nm"><span class="ic" style="--c:${s.c}"><i class="fa-brands ${s.i}"></i></span>${s.n}</div>`;
     const openUrl = s.login || ("https://" + s.p);
-    const connectButton = s.p
-      ? (linked[s.p]
-          ? `<button class="btn-brand" style="--c:${s.c}" data-act="alreadyconnected" data-k="${k}">Connect</button>`
-          : `<button class="btn-brand" style="--c:${s.c}" data-act="oauth" data-k="${k}">Connect</button>`)
+    const connectButton = on
+      ? `<button class="btn-brand" style="--c:${s.c}" data-act="alreadyconnected" data-k="${k}">Connected</button>`
       : `<button class="btn-brand" style="--c:${s.c}" data-act="connecthandle" data-k="${k}">Connect</button>`;
     const status = on ? `<small><span class="tag green">CONNECTED</span> ${esc(who)}</small>` : `<small>Not connected</small>`;
     return `<div class="soc-card" data-card="${k}">${head}${status}<div class="row-btns"><a class="btn btn-light btn-sm" target="_blank" rel="noopener noreferrer" href="${esc(openUrl)}">Open</a>${connectButton}</div></div>`;
@@ -424,7 +422,9 @@ document.addEventListener("click", async e => {
       comments.docs.forEach(d => batch.delete(d.ref));
       batch.delete(db.collection("forumPosts").doc(id));
       await batch.commit(); route();
-    } else if (act === "oauth") { await oauthLink(b.dataset.k); b.disabled = false; }
+    } else if (act === "connecthandle") { askHandle(b.dataset.k); b.disabled = false; }
+    else if (act === "alreadyconnected") { toast(SOCIALS[b.dataset.k].n + " is already connected."); b.disabled = false; }
+    else if (act === "oauth") { await oauthLink(b.dataset.k); b.disabled = false; }
     else if (act === "ext") { window.open(SOCIALS[b.dataset.k].login, "_blank", "noopener"); askHandle(b.dataset.k); }
     else if (act === "addhandle") askHandle(b.dataset.k);
     else if (act === "cancelsoc") route();
