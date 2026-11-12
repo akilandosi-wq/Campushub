@@ -112,13 +112,13 @@ function route() {
     const portal = profile.role === "admin" ? "admin.html" : "teacher.html";
     return location.replace(portal + "#/" + (page === "home" ? "dashboard" : page));
   }
-  const titles = { home: "Home", modules: "Modules", work: "Assignments & Tests", chat: "Chat", profile: "My Profile", student: "Student profile" };
+  const titles = { home: "Home", modules: "Modules", work: "Assignments & Tests", results: "My Results", chat: "Chat", profile: "My Profile", student: "Student profile" };
   $("pageTitle").textContent = titles[page] || "Overview";
   document.querySelectorAll(".side-link[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
   $("backBtn").style.visibility = page === "home" ? "hidden" : "visible";
   $("sidebar").classList.remove("open"); window.scrollTo(0, 0);
   view('<div class="empty">Loading…</div>');
-  const pages = { home: homePage, modules: modulesPage, work: workPage, chat: chatPage, profile: profilePage, student: studentPage };
+  const pages = { home: homePage, modules: modulesPage, work: workPage, results: resultsPage, chat: chatPage, profile: profilePage, student: studentPage };
   return (pages[page] || homePage)(arg).catch(err => view(`<div class="panel empty">Could not load: ${esc(friendly(err))}</div>`));
 }
 
@@ -271,6 +271,16 @@ async function workPage() {
   const items = (await db.collection("work").where("moduleId", "in", ids.slice(0, 30)).get()).docs.map(d => d.data()).sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const list = t => items.filter(i => i.type === t).map(i => `<div class="list-item"><div><strong>${esc(i.title)}</strong><small>${esc(i.moduleName)}</small><small>${esc(i.details)}</small>${safeUrl(i.link) ? `<small><a href="${safeUrl(i.link)}" target="_blank" rel="noopener">Open material</a></small>` : ""}</div><span class="tag ${t === "test" ? "gold" : ""}">${esc(i.date || "No date")}</span></div>`).join("") || '<div class="empty">Nothing posted yet.</div>';
   view(head("Assignments & Tests", "Work from your registered modules.") + `<div class="cols"><div class="panel"><h3>Assignments</h3>${list("assignment")}</div><div class="panel"><h3>Tests &amp; Exams</h3>${list("test")}</div></div>`);
+}
+
+/* ---------- PUBLISHED RESULTS (student) ---------- */
+async function resultsPage() {
+  const snap = await db.collection("results").where("studentId", "==", me.uid).get();
+  const rows = snap.docs.map(d => d.data()).filter(r => r.status === "published")
+    .sort((a,b) => String(b.publishedAt || "").localeCompare(String(a.publishedAt || "")));
+  const pct = n => Number(n || 0).toFixed(1) + "%";
+  view(head("My Results", "Only results approved and published by the institute are shown here.") +
+    (rows.length ? `<div class="panel"><div class="table-wrap"><table class="tbl"><thead><tr><th>Module</th><th>Assessment</th><th>Score</th><th>Percentage</th><th>Published</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.moduleName)}</td><td>${esc(r.assessmentTitle)}</td><td>${Number(r.score)} / ${Number(r.maxScore)}</td><td><span class="tag green">${pct(r.percentage)}</span></td><td>${esc(r.publishedAt ? new Date(r.publishedAt).toLocaleDateString() : "—")}</td></tr>`).join("")}</tbody></table></div></div>` : '<div class="panel empty">No results have been published to your account yet.</div>'));
 }
 
 /* ---------- CHAT ---------- */
