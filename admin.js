@@ -260,10 +260,26 @@ async function results() {
       if (!mod || !title || !(maxScore > 0) || !list.length) return toast("Check the assessment details and module registrations.", true);
       const entries = list.map(student => ({ student, score: Number(e.target.elements["score_" + student.studentId].value) }));
       if (entries.some(x => !Number.isFinite(x.score) || x.score < 0 || x.score > maxScore)) return toast("Each score must be between 0 and the maximum score.", true);
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Submitting marks…";
       try {
-        for (const {student,score} of entries) await col("results").add({ moduleId, moduleName: mod.code + " — " + mod.name, teacherId: me.uid, teacherName: profile.fullName || "", studentId: student.studentId, studentName: student.studentName || "", regNo: student.regNo || "", assessmentTitle: title, score, maxScore, percentage: score / maxScore * 100, status: "submitted", feedback: "", submittedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        const submittedAt = firebase.firestore.FieldValue.serverTimestamp();
+        const payload = entries.map(({student,score}) => ({
+          moduleId, moduleName: mod.code + " — " + mod.name,
+          teacherId: me.uid, teacherName: profile.fullName || "",
+          studentId: student.studentId, studentName: student.studentName || "",
+          regNo: student.regNo || "", assessmentTitle: title, score, maxScore,
+          percentage: score / maxScore * 100, status: "submitted", feedback: "", submittedAt
+        }));
+        // One database insert keeps the class assessment together if a request fails.
+        await col("results").addMany(payload);
         toast("Marks submitted to Admin for review."); route();
-      } catch (err) { fail(err); }
+      } catch (err) {
+        fail(err);
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Submit marks for admin review";
+      }
     };
   }
 }
