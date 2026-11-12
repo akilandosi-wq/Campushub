@@ -112,13 +112,13 @@ function route() {
     const portal = profile.role === "admin" ? "admin.html" : "teacher.html";
     return location.replace(portal + "#/" + (page === "home" ? "dashboard" : page));
   }
-  const titles = { home: "Home", modules: "Modules", work: "Assignments & Tests", results: "My Results", chat: "Chat", profile: "My Profile", student: "Student profile" };
+  const titles = { home: "Home", modules: "Modules", work: "Assignments & Tests", results: "My Results", timetable: "My Timetable", chat: "Chat", profile: "My Profile", student: "Student profile" };
   $("pageTitle").textContent = titles[page] || "Overview";
   document.querySelectorAll(".side-link[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
   $("backBtn").style.visibility = page === "home" ? "hidden" : "visible";
   $("sidebar").classList.remove("open"); window.scrollTo(0, 0);
   view('<div class="empty">Loading…</div>');
-  const pages = { home: homePage, modules: modulesPage, work: workPage, results: resultsPage, chat: chatPage, profile: profilePage, student: studentPage };
+  const pages = { home: homePage, modules: modulesPage, work: workPage, results: resultsPage, timetable: timetablePage, chat: chatPage, profile: profilePage, student: studentPage };
   return (pages[page] || homePage)(arg).catch(err => view(`<div class="panel empty">Could not load: ${esc(friendly(err))}</div>`));
 }
 
@@ -281,6 +281,17 @@ async function resultsPage() {
   const pct = n => Number(n || 0).toFixed(1) + "%";
   view(head("My Results", "Only results approved and published by the institute are shown here.") +
     (rows.length ? `<div class="panel"><div class="table-wrap"><table class="tbl"><thead><tr><th>Module</th><th>Assessment</th><th>Score</th><th>Percentage</th><th>Published</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.moduleName)}</td><td>${esc(r.assessmentTitle)}</td><td>${Number(r.score)} / ${Number(r.maxScore)}</td><td><span class="tag green">${pct(r.percentage)}</span></td><td>${esc(r.publishedAt ? new Date(r.publishedAt).toLocaleDateString() : "—")}</td></tr>`).join("")}</tbody></table></div></div>` : '<div class="panel empty">No results have been published to your account yet.</div>'));
+}
+
+/* ---------- STUDENT TIMETABLE ---------- */
+async function timetablePage() {
+  const ids=(await db.collection("moduleEnrollments").where("studentId","==",me.uid).get()).docs.map(d=>d.data().moduleId);
+  if(!ids.length) return view(head("My Timetable","Your weekly class schedule.")+'<div class="panel empty">Register for modules to see your timetable.</div>');
+  const rows=(await db.collection("timetable").where("moduleId","in",ids.slice(0,30)).get()).docs.map(d=>d.data());
+  const order=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+  rows.sort((a,b)=>order.indexOf(a.day)-order.indexOf(b.day)||String(a.startTime).localeCompare(String(b.startTime)));
+  const days=order.filter(day=>rows.some(r=>r.day===day));
+  view(head("My Timetable","Your weekly class schedule based on registered modules.")+(rows.length?days.map(day=>`<div class="panel"><h3>${day}</h3>${rows.filter(r=>r.day===day).map(r=>`<div class="list-item"><div><strong>${esc(r.startTime)}–${esc(r.endTime)} · ${esc(r.moduleName)}</strong><small>${esc(r.venue||"Venue to be announced")} · Lecturer: ${esc(r.teacherName||"—")}</small></div></div>`).join("")}</div>`).join(""):'<div class="panel empty">No timetable sessions have been published for your registered modules.</div>'));
 }
 
 /* ---------- CHAT ---------- */
