@@ -175,7 +175,7 @@ on conflict (id) do update set public=false, file_size_limit=20971520, allowed_m
 -- Storage policies use a SECURITY DEFINER helper to avoid nested RLS blocking module ownership checks.
 create or replace function public.campushub_can_upload_notes(module_id text)
 returns boolean language sql stable security definer set search_path = public
-as $
+as $campushub_notes$
   select auth.uid() is not null
     and (
       public.campushub_role() = 'admin'
@@ -186,7 +186,7 @@ as $
           and m.data->>'teacherId' = auth.uid()::text
       )
     );
-$;
+$campushub_notes$;
 
 drop policy if exists "CampusHub notes read" on storage.objects;
 drop policy if exists "CampusHub notes upload" on storage.objects;
