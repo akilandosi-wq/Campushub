@@ -112,13 +112,13 @@ function route() {
     const portal = profile.role === "admin" ? "admin.html" : "teacher.html";
     return location.replace(portal + "#/" + (page === "home" ? "dashboard" : page));
   }
-  const titles = { home: "Home", modules: "Modules", work: "Assignments & Tests", results: "My Results", timetable: "My Timetable", progress: "Academic Progress", forum: "Student Forum", chat: "Chat", profile: "My Profile", student: "Student profile" };
+  const titles = { home: "Home", modules: "Modules", work: "Assignments & Tests", results: "My Results", timetable: "My Timetable", progress: "Academic Progress", forum: "Student Forum", fees: "My Fees", chat: "Chat", profile: "My Profile", student: "Student profile" };
   $("pageTitle").textContent = titles[page] || "Overview";
   document.querySelectorAll(".side-link[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
   $("backBtn").style.visibility = page === "home" ? "hidden" : "visible";
   $("sidebar").classList.remove("open"); window.scrollTo(0, 0);
   view('<div class="empty">Loading…</div>');
-  const pages = { home: homePage, modules: modulesPage, work: workPage, results: resultsPage, timetable: timetablePage, progress: progressPage, forum: forumPage, chat: chatPage, profile: profilePage, student: studentPage };
+  const pages = { home: homePage, modules: modulesPage, work: workPage, results: resultsPage, timetable: timetablePage, progress: progressPage, forum: forumPage, fees: feesPage, chat: chatPage, profile: profilePage, student: studentPage };
   return (pages[page] || homePage)(arg).catch(err => view(`<div class="panel empty">Could not load: ${esc(friendly(err))}</div>`));
 }
 
@@ -334,6 +334,16 @@ async function forumPage([postId]) {
     <div class="panel"><h3>Start a discussion</h3><form id="forumPostForm"><div class="form-grid"><div class="field"><label>Discussion title</label><input id="forumTitle" required maxlength="120" placeholder="What would you like to discuss?"></div><div class="field"><label>Category</label><select id="forumCategory"><option>General</option><option>Computer Engineering</option><option>Electronics</option><option>Networking</option><option>Academic Support</option><option>Campus Life</option></select></div><div class="field full"><label>Message</label><textarea id="forumBody" required rows="4" maxlength="5000" placeholder="Explain your question or idea…"></textarea></div></div><button class="btn btn-primary" type="submit">Publish discussion</button></form></div>
     <div class="panel"><h3>Recent discussions (${posts.length})</h3>${posts.map(p=>`<div class="list-item"><div><a href="#/forum/${encodeURIComponent(p.id)}"><strong>${esc(p.title)}</strong></a><small>${esc(p.category||"General")} · ${esc(p.authorName||"Student")} · ${esc(fmtDate(p.createdAt))}</small><p>${esc((p.body||"").slice(0,180))}${(p.body||"").length>180?"…":""}</p></div>${p.authorId===me.uid?`<button class="btn btn-danger btn-sm" data-act="delete-forum-post" data-id="${esc(p.id)}">Delete</button>`:""}</div>`).join("")||'<div class="empty">No discussions yet. Start the first one.</div>'}</div>`);
   $("forumPostForm").onsubmit=async e=>{e.preventDefault();const title=$("forumTitle").value.trim(),body=$("forumBody").value.trim();if(!title||!body)return;const btn=e.target.querySelector("button");btn.disabled=true;try{await db.collection("forumPosts").add({title,body,category:$("forumCategory").value,authorId:me.uid,authorName:profile.fullName||"Student",createdAt:firebase.firestore.FieldValue.serverTimestamp()});toast("Discussion published.");route();}catch(err){toast(friendly(err),true);btn.disabled=false;}};
+}
+
+/* ---------- STUDENT FEE STATEMENTS ---------- */
+async function feesPage() {
+  const rows=(await db.collection("fees").where("studentId","==",me.uid).get()).docs.map(d=>d.data()).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+  const total=rows.filter(r=>r.status!=="paid").reduce((sum,r)=>sum+Number(r.amount||0),0);
+  view(head("My Fees","View fee statements and payment verification status.")+
+    `<div class="panel"><div class="row-btns" style="justify-content:space-between"><strong>Outstanding balance</strong><strong>${total.toLocaleString()} TZS</strong></div></div>
+    <div class="panel"><h3>Fee statements</h3>${rows.map(r=>`<div class="list-item"><div><strong>${esc(r.title)}</strong><small>${esc(r.academicYear)} · ${esc(r.semester)} · Due: ${esc(r.dueDate||"Not specified")}</small><small>Reference: ${esc(r.reference||"—")}</small><strong>${Number(r.amount).toLocaleString()} TZS</strong></div><span class="tag ${r.status==="paid"?"green":"gold"}">${esc(r.status||"unpaid")}</span></div>`).join("")||'<div class="empty">No fee statements are available on your account.</div>'}</div>
+    <p class="subtle">CampusHub does not process payments. Use the official payment instructions and reference issued by DIT. A statement changes to paid only after an administrator verifies the official payment record.</p>`);
 }
 
 /* ---------- CHAT ---------- */
