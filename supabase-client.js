@@ -28,8 +28,11 @@ const auth = {
   },
   signOut: async () => { const { error } = await sb.auth.signOut(); if (error) throw error; },
   onAuthStateChanged: callback => {
-    sb.auth.getSession().then(({ data }) => callback(data.session ? wrapUser(data.session.user) : null));
-    const { data } = sb.auth.onAuthStateChange((_event, session) => callback(session ? wrapUser(session.user) : null));
+    // Supabase emits INITIAL_SESSION after the listener is registered.
+    // Avoid a second getSession callback that used to load the same profile twice.
+    const { data } = sb.auth.onAuthStateChange((_event, session) => {
+      callback(session ? wrapUser(session.user) : null);
+    });
     return () => data.subscription.unsubscribe();
   },
   getRedirectResult: async () => null
@@ -140,6 +143,17 @@ class Query {
     const { error } = await sb.from("campushub_documents").insert({ collection_name: this.name, id, data: clone(value) });
     if (error) throw error;
     return { id };
+  }
+  async addMany(values) {
+    if (!Array.isArray(values) || !values.length) return [];
+    const rows = values.map(value => ({
+      collection_name: this.name,
+      id: crypto.randomUUID(),
+      data: clone(value)
+    }));
+    const { error } = await sb.from("campushub_documents").insert(rows);
+    if (error) throw error;
+    return rows.map(row => ({ id: row.id }));
   }
   async set(value, options) { return this.doc(this.id || crypto.randomUUID()).set(value, options); }
   async update(value) { return this.doc(this.id).update(value); }
