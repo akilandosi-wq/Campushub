@@ -112,13 +112,13 @@ function route() {
     const portal = profile.role === "admin" ? "admin.html" : "teacher.html";
     return location.replace(portal + "#/" + (page === "home" ? "dashboard" : page));
   }
-  const titles = { home: "Home", modules: "Modules", work: "Assignments & Tests", results: "My Results", timetable: "My Timetable", chat: "Chat", profile: "My Profile", student: "Student profile" };
+  const titles = { home: "Home", modules: "Modules", work: "Assignments & Tests", results: "My Results", timetable: "My Timetable", progress: "Academic Progress", chat: "Chat", profile: "My Profile", student: "Student profile" };
   $("pageTitle").textContent = titles[page] || "Overview";
   document.querySelectorAll(".side-link[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
   $("backBtn").style.visibility = page === "home" ? "hidden" : "visible";
   $("sidebar").classList.remove("open"); window.scrollTo(0, 0);
   view('<div class="empty">Loading…</div>');
-  const pages = { home: homePage, modules: modulesPage, work: workPage, results: resultsPage, timetable: timetablePage, chat: chatPage, profile: profilePage, student: studentPage };
+  const pages = { home: homePage, modules: modulesPage, work: workPage, results: resultsPage, timetable: timetablePage, progress: progressPage, chat: chatPage, profile: profilePage, student: studentPage };
   return (pages[page] || homePage)(arg).catch(err => view(`<div class="panel empty">Could not load: ${esc(friendly(err))}</div>`));
 }
 
@@ -292,6 +292,27 @@ async function timetablePage() {
   rows.sort((a,b)=>order.indexOf(a.day)-order.indexOf(b.day)||String(a.startTime).localeCompare(String(b.startTime)));
   const days=order.filter(day=>rows.some(r=>r.day===day));
   view(head("My Timetable","Your weekly class schedule based on registered modules.")+(rows.length?days.map(day=>`<div class="panel"><h3>${day}</h3>${rows.filter(r=>r.day===day).map(r=>`<div class="list-item"><div><strong>${esc(r.startTime)}–${esc(r.endTime)} · ${esc(r.moduleName)}</strong><small>${esc(r.venue||"Venue to be announced")} · Lecturer: ${esc(r.teacherName||"—")}</small></div></div>`).join("")}</div>`).join(""):'<div class="panel empty">No timetable sessions have been published for your registered modules.</div>'));
+}
+
+/* ---------- ACADEMIC PROGRESS ---------- */
+async function progressPage() {
+  const snap=await db.collection("results").where("studentId","==",me.uid).get();
+  const rows=snap.docs.map(d=>d.data()).filter(r=>r.status==="published");
+  const average=rows.length?rows.reduce((sum,r)=>sum+Number(r.percentage||0),0)/rows.length:0;
+  const groups=new Map();
+  rows.forEach(r=>{
+    const key=r.moduleName||"Other modules";
+    const item=groups.get(key)||{count:0,total:0,latest:null};
+    item.count++; item.total+=Number(r.percentage||0);
+    const date=new Date(r.publishedAt||r.submittedAt||0).getTime();
+    if(!item.latest||date>item.latest.date) item.latest={date,percentage:Number(r.percentage||0),title:r.assessmentTitle||"Assessment"};
+    groups.set(key,item);
+  });
+  const modules=[...groups.entries()].map(([name,x])=>({name,count:x.count,average:x.total/x.count,latest:x.latest})).sort((a,b)=>a.name.localeCompare(b.name));
+  const bar=n=>Math.max(0,Math.min(100,Number(n)||0));
+  view(head("Academic Progress","A summary of assessment results that have been officially published to your account.")+
+    (rows.length?`<div class="stats"><div class="stat"><div class="stat-icon"><i class="fa-solid fa-chart-line"></i></div><div><strong>${average.toFixed(1)}%</strong><span>Overall average</span></div></div><div class="stat"><div class="stat-icon"><i class="fa-solid fa-clipboard-check"></i></div><div><strong>${rows.length}</strong><span>Published assessments</span></div></div><div class="stat"><div class="stat-icon"><i class="fa-solid fa-book-open"></i></div><div><strong>${modules.length}</strong><span>Modules with results</span></div></div></div>
+    <div class="panel"><h3>Progress by module</h3>${modules.map(m=>`<div class="progress-item"><div class="row-btns" style="justify-content:space-between"><strong>${esc(m.name)}</strong><b>${m.average.toFixed(1)}%</b></div><div class="progress-track"><span style="width:${bar(m.average)}%"></span></div><small>${m.count} published assessment(s) · Latest: ${esc(m.latest.title)} (${m.latest.percentage.toFixed(1)}%)</small></div>`).join("")}</div>`:'<div class="panel empty">Your academic progress will appear here after results are published by your lecturers and approved by the administrator.</div>'));
 }
 
 /* ---------- CHAT ---------- */
