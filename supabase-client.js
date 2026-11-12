@@ -85,7 +85,12 @@ const firebase = {
   })
 };
 class Snapshot {
-  constructor(row) { this.id = row?.id ?? null; this.exists = !!row; this._data = row ? row.data : undefined; }
+  constructor(row, collectionName) {
+    this.id = row?.id ?? null;
+    this.exists = !!row;
+    this._data = row ? row.data : undefined;
+    this.ref = row && collectionName ? new DocumentRef(collectionName, row.id) : null;
+  }
   data() { return this._data; }
 }
 function clone(value) { return value == null ? value : JSON.parse(JSON.stringify(value)); }
@@ -135,7 +140,7 @@ class Query {
       });
     }
     if (this.max != null) rows = this.last ? rows.slice(-this.max) : rows.slice(0, this.max);
-    const docs = rows.map(row => new Snapshot(row));
+    const docs = rows.map(row => new Snapshot(row, this.name));
     return { docs, size: docs.length, empty: !docs.length, forEach: fn => docs.forEach(fn) };
   }
   async add(value) {
@@ -165,7 +170,7 @@ class DocumentRef extends Query {
   async get() {
     const { data, error } = await sb.from("campushub_documents").select("id,data").eq("collection_name", this.name).eq("id", this.id).maybeSingle();
     if (error) throw error;
-    return new Snapshot(data);
+    return new Snapshot(data, this.name);
   }
   async set(value, options) {
     const current = options && options.merge ? await this.get() : null;
