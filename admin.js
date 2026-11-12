@@ -45,13 +45,13 @@ const myWork = async () => (await (isAdmin() ? col("work") : col("work").where("
 function route() {
   if (!me) return;
   const [page = "dashboard", ...arg] = location.hash.replace(/^#\/?/, "").split("/");
-  const titles = { dashboard: "Dashboard", modules: "Modules", module: "Module", work: "Assignments & Tests", students: "My Students", users: "Manage Users", results: "Results Management", timetable: "Timetable" };
+  const titles = { dashboard: "Dashboard", modules: "Modules", module: "Module", work: "Assignments & Tests", students: "My Students", users: "Manage Users", results: "Results Management", timetable: "Timetable", fees: "Fee Management" };
   $("pageTitle").textContent = titles[page] || "Dashboard";
   document.querySelectorAll(".side-link[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === (page === "module" ? "modules" : page)));
   $("backBtn").style.visibility = page === "dashboard" ? "hidden" : "visible";
   $("sidebar").classList.remove("open"); window.scrollTo(0, 0);
   view('<div class="empty">Loading…</div>');
-  const pages = { dashboard: isAdmin() ? adminDashboard : dashboard, modules, module: modulePage, work: workAll, students, users, results, timetable };
+  const pages = { dashboard: isAdmin() ? adminDashboard : dashboard, modules, module: modulePage, work: workAll, students, users, results, timetable, fees };
   (pages[page] || dashboard)(arg).catch(e => view(`<div class="panel empty">Could not load: ${esc(e.message)}</div>`));
 }
 
@@ -312,6 +312,33 @@ async function results() {
   }
 }
 
+/* ----- fee statement management (admin) ----- */
+async function fees() {
+  if(!isAdmin()) return view('<div class="panel empty">Administrators only.</div>');
+  const [studentsSnap,feeSnap]=await Promise.all([col("students").get(),col("fees").get()]);
+  const people=studentsSnap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.role==="student").sort((x,y)=>(x.fullName||"").localeCompare(y.fullName||""));
+  const records=feeSnap.docs.map(d=>({id:d.id,...d.data()})).sort((x,y)=>String(y.createdAt||"").localeCompare(String(x.createdAt||"")));
+  view(head("Fee Management","Create student fee statements and update payment status only after official verification.")+
+    `<div class="panel"><h3>Create fee statement</h3>${people.length?`<form id="feeForm"><div class="form-grid">
+      <div class="field full"><label>Student</label><select id="feeStudent" required>${people.map(x=>`<option value="${esc(x.id)}">${esc(x.fullName)} · ${esc(x.regNo||x.email||"")}</option>`).join("")}</select></div>
+      <div class="field"><label>Fee description</label><input id="feeTitle" required placeholder="Tuition fee / Registration fee"></div>
+      <div class="field"><label>Amount (TZS)</label><input id="feeAmount" type="number" min="1" step="1" required></div>
+      <div class="field"><label>Academic year</label><input id="feeYear" required placeholder="2026/2027"></div>
+      <div class="field"><label>Semester</label><select id="feeSemester"><option>Semester 1</option><option>Semester 2</option><option>Annual</option></select></div>
+      <div class="field"><label>Due date</label><input id="feeDue" type="date"></div>
+      <div class="field full"><label>Payment control number / reference (optional)</label><input id="feeRef" placeholder="Official payment reference"></div>
+    </div><button class="btn btn-primary" type="submit">Create statement</button></form>`:'<div class="empty">No student profiles found.</div>'}</div>
+    <div class="panel"><h3>Student fee statements (${records.length})</h3>${records.map(r=>`<div class="list-item"><div><strong>${esc(r.studentName)} · ${esc(r.title)}</strong><small>${Number(r.amount).toLocaleString()} TZS · ${esc(r.academicYear)} · ${esc(r.semester)}</small><small>Due: ${esc(r.dueDate||"Not specified")} · Reference: ${esc(r.reference||"—")}</small><span class="tag ${r.status==="paid"?"green":"gold"}">${esc(r.status||"unpaid")}</span></div>${r.status!=="paid"?`<button class="btn btn-light btn-sm" data-act="verify-fee" data-id="${esc(r.id)}">Verify paid</button>`:""}</div>`).join("")||'<div class="empty">No fee statements have been created.</div>'}</div>`);
+  const form=$("feeForm");
+  if(form) form.onsubmit=async e=>{
+    e.preventDefault();
+    const student=people.find(x=>x.id===$("feeStudent").value),amount=Number($("feeAmount").value),title=$("feeTitle").value.trim();
+    if(!student||!title||!Number.isFinite(amount)||amount<=0)return toast("Enter a valid student, fee description and amount.",true);
+    const btn=form.querySelector('button[type="submit"]');btn.disabled=true;
+    try{await col("fees").add({studentId:student.id,studentName:student.fullName||"Student",regNo:student.regNo||"",title,amount,currency:"TZS",academicYear:$("feeYear").value.trim(),semester:$("feeSemester").value,dueDate:$("feeDue").value,reference:$("feeRef").value.trim(),status:"unpaid",createdAt:firebase.firestore.FieldValue.serverTimestamp()});toast("Fee statement created.");route();}
+    catch(err){fail(err);btn.disabled=false;}
+  };
+}
 async function users() {
   if (!isAdmin()) return view('<div class="panel empty">Administrators only.</div>');
   const all = (await col("students").get()).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.fullName || "").localeCompare(b.fullName || ""));
@@ -345,6 +372,14 @@ document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const { act, id } = b.dataset;
   try {
+    if (act === "verify-fee") {
+      if(!isAdmin()) throw new Error("Only administrators can verify fee payments.");
+      if(!confirm("Confirm that the payment has been checked against the official DIT payment record?")) return;
+      const fee=await col("fees").doc(id).get();
+      if(!fee.exists) throw new Error("Fee statement not found.");
+      await col("fees").doc(id).update({status:"paid",verifiedAt:firebase.firestore.FieldValue.serverTimestamp(),verifiedBy:me.uid});
+      toast("Payment marked as verified.");route();
+    }
     if (act === "assignteacher") {
       if (!isAdmin()) throw new Error("Only administrators can assign lecturers.");
       const select = document.querySelector(`[data-module-teacher="${CSS.escape(id)}"]`);
