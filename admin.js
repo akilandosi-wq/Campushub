@@ -2,7 +2,7 @@
 let me = null, profile = {};
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const isAdmin = () => profile.role === "admin";
+const isAdmin = () => profile.role === "admin";\nlet teachersCache = new Map();
 const portalRole = document.body.dataset.portal || "admin";
 const view = h => { $("view").innerHTML = h; };
 const head = (t, p) => `<div class="page-head"><h1>${t}</h1><p>${p}</p></div>`;
@@ -152,79 +152,36 @@ async function adminDashboard() {
 
 /* ----- modules ----- */
 async function modules() {
-  const [mods, enr] = await Promise.all([myModules(), myEnr()]);
-  view(head("Modules", "Create modules. Students register themselves and appear under the module.") + `
+  const [mods, enr, teacherDocs] = await Promise.all([
+    myModules(), myEnr(),
+    isAdmin() ? col("students").where("role", "==", "teacher").get() : Promise.resolve({ docs: [] })
+  ]);
+  const teachers = teacherDocs.docs.map(d => ({ id: d.id, ...d.data() }));
+  teachersCache = new Map(teachers.map(t => [t.id, t]));
+  const teacherOptions = selected => teachers.map(t => `<option value="${esc(t.id)}" ${t.id === selected ? "selected" : ""}>${esc(t.fullName || t.email || t.id)}</option>`).join("");
+  view(head("Modules", isAdmin() ? "Create modules and assign each module to its lecturer." : "Create modules for your classes. Students register themselves and appear under the module.") + `
   <div class="panel"><h3>Create a module</h3><form id="mf"><div class="form-grid">
-    <div class="field"><label>Module code</label><input id="mCode" placeholder="e.g. ETU 07101"></div><div class="field"><label>Module name</label><input id="mName"></div>
+    <div class="field"><label>Module code</label><input id="mCode" placeholder="e.g. ETU 07101" required></div><div class="field"><label>Module name</label><input id="mName" required></div>
     <div class="field full"><label>Description (optional)</label><input id="mDesc"></div>
-    <div class="field full"><label>Learning resource link (optional)</label><input id="mLink" type="url" placeholder="https://"></div></div>
-    <button class="btn btn-primary" type="submit">Create module</button></form></div>
-  <div class="panel"><h3>${isAdmin() ? "All modules" : "My modules"}</h3>${mods.map(m => `<div class="list-item"><div><strong>${esc(m.code)} — ${esc(m.name)}</strong><small>${esc(m.teacherName)} · ${enr.filter(e => e.moduleId === m.id).length} students</small></div><a class="btn btn-light btn-sm" href="#/module/${m.id}">Open</a></div>`).join("") || '<div class="empty">No modules yet.</div>'}</div>`);
+    <div class="field full"><label>Learning resource link (optional)</label><input id="mLink" type="url" placeholder="https://"></div>
+    ${isAdmin() ? `<div class="field full"><label>Assign lecturer</label><select id="mTeacher" required><option value="">Select a teacher</option>${teacherOptions("")}</select></div>` : ""}
+  </div><button class="btn btn-primary" type="submit">Create module</button></form></div>
+  <div class="panel"><h3>${isAdmin() ? "All modules" : "My modules"}</h3>${mods.map(m => `<div class="list-item"><div><strong>${esc(m.code)} — ${esc(m.name)}</strong><small>${esc(m.teacherName || "Lecturer not assigned")} · ${enr.filter(e => e.moduleId === m.id).length} students</small></div><div class="row-btns">${isAdmin() ? `<select data-module-teacher="${esc(m.id)}" aria-label="Assign lecturer">${teacherOptions(m.teacherId)}</select><button class="btn btn-light btn-sm" data-act="assignteacher" data-id="${esc(m.id)}">Save lecturer</button>` : ""}<a class="btn btn-light btn-sm" href="#/module/${esc(m.id)}">Open</a></div></div>`).join("") || '<div class="empty">No modules yet.</div>'}</div>`);
   $("mf").onsubmit = async e => {
     e.preventDefault();
     const code = $("mCode").value.trim(), name = $("mName").value.trim(), resource = $("mLink").value.trim();
     if (!code || !name) return toast("Module code and name are required.", true);
     if (resource && !/^https?:\/\//i.test(resource)) return toast("Link must start with https://", true);
-    try { await col("modules").add({ code, name, description: $("mDesc").value.trim(), resource, teacherId: me.uid, teacherName: profile.fullName, createdAt: firebase.firestore.FieldValue.serverTimestamp() }); toast("Module created."); route(); }
-    catch (err) { fail(err); }
+    const assigned = isAdmin() ? teachers.find(t => t.id === $("mTeacher").value) : { id: me.uid, fullName: profile.fullName };
+    if (!assigned) return toast("Select a registered teacher for this module.", true);
+    try {
+      await col("modules").add({ code, name, description: $("mDesc").value.trim(), resource, teacherId: assigned.id, teacherName: assigned.fullName || assigned.email || "Teacher", createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      toast("Module created and assigned to " + (assigned.fullName || "the selected teacher") + ".");
+      route();
+    } catch (err) { fail(err); }
   };
 }
 
-/* ----- single module: monitor students + post work ----- */
-async function modulePage([id]) {
-  const md = await col("modules").doc(id || "x").get();
-  if (!md.exists) return view('<div class="panel empty">Module not found.</div>');
-  const m = { id, ...md.data() };
-  const [enrS, workS, notesS] = await Promise.all([col("moduleEnrollments").where("moduleId", "==", id).where("teacherId", "==", m.teacherId).get(), col("work").where("moduleId", "==", id).get(), col("notes").where("moduleId", "==", id).get()]);
-  const st = enrS.docs.map(d => d.data()).sort((a, b) => a.studentName.localeCompare(b.studentName));
-  const wk = workS.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  const notes = notesS.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => ms(b.createdAt) - ms(a.createdAt));
-  const rows = q => st.filter(s => (s.studentName + s.regNo).toLowerCase().includes(q.toLowerCase())).map(s => `<tr><td><a href="index.html#/student/${esc(s.studentId)}">${esc(s.studentName)}</a></td><td>${esc(s.regNo)}</td><td>${esc(s.phone)}</td><td>${esc(s.course)}</td><td>${esc(s.year)}</td><td><a href="index.html#/chat/dm/${esc(s.studentId)}"><i class="fa-solid fa-comment"></i></a></td></tr>`).join("") || '<tr><td colspan="6" class="empty">No students found.</td></tr>';
-  view(head(esc(m.code) + " — " + esc(m.name), esc(m.description || "Module overview")) + `
-  <div class="stats">${stat("fa-user-graduate", st.length, "Registered students")}${stat("fa-file-pen", wk.filter(w => w.type !== "test").length, "Assignments")}${stat("fa-clipboard-check", wk.filter(w => w.type === "test").length, "Tests / Exams")}</div>
-  <div class="panel"><h3>Publish assignment or test</h3>${workForm([m])}</div>
-  <div class="panel"><h3>Published work</h3>${wk.map(w => workRow(w)).join("") || '<div class="empty">Nothing published yet.</div>'}</div>
-  <div class="panel"><h3>Module notes (PDF)</h3>
-    <form id="notesForm"><input id="notesModuleName" type="hidden" value="${esc(m.code + " — " + m.name)}"><div class="form-grid">
-      <div class="field"><label>Notes title</label><input id="notesTitle" maxlength="100" placeholder="e.g. Network Fundamentals — Chapter 1" required></div>
-      <div class="field"><label>Select PDF (maximum 20 MB)</label><input id="notesFile" type="file" accept="application/pdf,.pdf" required></div>
-    </div><button class="btn btn-primary" type="submit"><i class="fa-solid fa-cloud-arrow-up"></i> Upload notes</button></form>
-    <div class="notes-list">${notes.map(n => noteRow(n)).join("") || '<div class="empty">No notes uploaded for this module yet.</div>'}</div>
-  </div>
-  <div class="panel"><h3>Registered students</h3><div class="toolbar"><input class="form-control" id="sq" placeholder="Search by name or reg no…"><button class="btn btn-light" id="csv"><i class="fa-solid fa-download"></i> Export CSV</button></div>
-  <div class="table-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Reg no</th><th>Phone</th><th>Programme</th><th>Year</th><th></th></tr></thead><tbody id="srows">${rows("")}</tbody></table></div></div>
-  <div class="panel"><h3>Module settings</h3><div class="row-btns"><button class="btn btn-danger" data-act="delmod" data-id="${id}" data-t="${esc(m.teacherId)}"><i class="fa-solid fa-trash"></i> Delete this module</button></div><p class="subtle">Deleting a module also removes its registrations and published work.</p></div>`);
-  bindWorkForm(id);
-  bindNotesForm(id);
-  $("sq").oninput = e => { $("srows").innerHTML = rows(e.target.value); };
-  $("csv").onclick = () => {
-    const q = v => '"' + String(v ?? "").replace(/"/g, '""') + '"';
-    const t = [["Name", "Reg no", "Phone", "Programme", "Year"], ...st.map(s => [s.studentName, s.regNo, s.phone, s.course, s.year])].map(r => r.map(q).join(",")).join("\n");
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\ufeff" + t], { type: "text/csv" })); a.download = m.code.replace(/\W+/g, "_") + "_students.csv"; a.click();
-  };
-}
-
-/* ----- all work ----- */
-async function workAll() {
-  const [mods, wk] = await Promise.all([myModules(), myWork()]);
-  wk.sort((a, b) => String(b.date).localeCompare(String(a.date)));
-  view(head("Assignments & Tests", "Publish work for your modules. Only students registered in the module can see it.") +
-    (mods.length ? `<div class="panel"><h3>Publish new</h3>${workForm(mods)}</div>` : '<div class="panel empty">Create a module first.</div>') +
-    `<div class="panel"><h3>Published</h3>${wk.map(w => workRow(w)).join("") || '<div class="empty">Nothing published yet.</div>'}</div>`);
-  bindWorkForm();
-}
-
-/* ----- students across modules ----- */
-async function students() {
-  const enr = await myEnr(), map = {};
-  enr.forEach(e => { (map[e.studentId] ||= { ...e, mods: [] }).mods.push(e.moduleName.split(" ")[0] + " " + (e.moduleName.split(" ")[1] || "")); });
-  const all = Object.entries(map).map(([id, s]) => ({ id, ...s })).sort((a, b) => a.studentName.localeCompare(b.studentName));
-  const rows = q => all.filter(s => (s.studentName + s.regNo).toLowerCase().includes(q.toLowerCase())).map(s => `<tr><td><a href="index.html#/student/${esc(s.id)}">${esc(s.studentName)}</a></td><td>${esc(s.regNo)}</td><td>${esc(s.phone)}</td><td>${esc(s.course)} ${esc(s.year)}</td><td>${s.mods.map(x => `<span class="tag">${esc(x)}</span>`).join(" ")}</td></tr>`).join("") || '<tr><td colspan="5" class="empty">No students found.</td></tr>';
-  view(head(isAdmin() ? "All Students" : "My Students", `${all.length} student${all.length === 1 ? "" : "s"} registered in ${isAdmin() ? "the platform" : "your modules"}.`) + `<div class="panel"><div class="toolbar"><input class="form-control" id="sq" placeholder="Search by name or reg no…"></div><div class="table-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Reg no</th><th>Phone</th><th>Programme</th><th>Modules</th></tr></thead><tbody id="srows">${rows("")}</tbody></table></div></div>`);
-  $("sq").oninput = e => { $("srows").innerHTML = rows(e.target.value); };
-}
-
-/* ----- admin: manage users ----- */
 async function users() {
   if (!isAdmin()) return view('<div class="panel empty">Administrators only.</div>');
   const all = (await col("students").get()).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.fullName || "").localeCompare(b.fullName || ""));
@@ -258,6 +215,27 @@ document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const { act, id } = b.dataset;
   try {
+    if (act === "assignteacher") {
+      if (!isAdmin()) throw new Error("Only administrators can assign lecturers.");
+      const select = document.querySelector(`[data-module-teacher="${CSS.escape(id)}"]`);
+      const teacher = teachersCache.get(select?.value);
+      if (!select?.value || !teacher) throw new Error("Choose a valid teacher account.");
+      const moduleDoc = await col("modules").doc(id).get();
+      if (!moduleDoc.exists) throw new Error("Module not found.");
+      await col("modules").doc(id).update({ teacherId: teacher.id, teacherName: teacher.fullName || teacher.email || "Teacher" });
+      const [enrollments, workItems, notesItems] = await Promise.all([
+        col("moduleEnrollments").where("moduleId", "==", id).get(),
+        col("work").where("moduleId", "==", id).get(),
+        col("notes").where("moduleId", "==", id).get()
+      ]);
+      await Promise.all([
+        ...enrollments.docs.map(d => d.ref.update({ teacherId: teacher.id })),
+        ...workItems.docs.map(d => d.ref.update({ teacherId: teacher.id })),
+        ...notesItems.docs.map(d => d.ref.update({ teacherId: teacher.id }))
+      ]);
+      toast("Lecturer assigned. Existing module records were transferred.");
+      route();
+    }
     if (act === "downloadnote") {
       const url = await firebase.storage().ref(b.dataset.path).getDownloadURL();
       const a = document.createElement("a"); a.href = url; a.download = b.dataset.name || "notes.pdf"; a.target = "_blank"; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove();
