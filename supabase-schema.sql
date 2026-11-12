@@ -56,6 +56,7 @@ begin
         and e.data->>'studentId' = auth.uid()::text
     );
   end if;
+  if c in ('forumPosts','forumComments') then return true; end if;
   if c = 'notes' then
     return d->>'teacherId' = auth.uid()::text or exists (
       select 1 from public.campushub_documents e
@@ -108,6 +109,13 @@ begin
           and e.data->>'moduleId' = d->>'moduleId'
           and e.data->>'studentId' = d->>'studentId'
       );
+  end if;
+  if c = 'forumPosts' then return d->>'authorId' = auth.uid()::text; end if;
+  if c = 'forumComments' then
+    return d->>'authorId' = auth.uid()::text and exists (
+      select 1 from public.campushub_documents p
+      where p.collection_name = 'forumPosts' and p.id = d->>'postId'
+    );
   end if;
   if c = 'work' or c = 'notes' then return d->>'teacherId' = auth.uid()::text and exists (select 1 from public.campushub_documents m where m.collection_name = 'modules' and m.id = d->>'moduleId' and m.data->>'teacherId' = auth.uid()::text); end if;
   if c like 'chatRooms/%' then
