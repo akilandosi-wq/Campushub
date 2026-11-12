@@ -400,6 +400,20 @@ document.addEventListener("click", async e => {
     } else if (act === "drop") {
       if (!confirm("Drop this module?")) return (b.disabled = false);
       await db.collection("moduleEnrollments").doc(me.uid + "_" + id).delete(); toast("Module dropped."); route();
+    } else if (act === "delete-forum-comment") {
+      const comment = await db.collection("forumComments").doc(id).get();
+      if (!comment.exists || comment.data().authorId !== me.uid) throw new Error("You can only delete your own comment.");
+      if (!confirm("Delete this comment?")) return (b.disabled = false);
+      await db.collection("forumComments").doc(id).delete(); route();
+    } else if (act === "delete-forum-post") {
+      const post = await db.collection("forumPosts").doc(id).get();
+      if (!post.exists || post.data().authorId !== me.uid) throw new Error("You can only delete your own discussion.");
+      if (!confirm("Delete this discussion and its comments?")) return (b.disabled = false);
+      const comments = await db.collection("forumComments").where("postId", "==", id).get();
+      const batch = db.batch();
+      comments.docs.forEach(d => batch.delete(d.ref));
+      batch.delete(db.collection("forumPosts").doc(id));
+      await batch.commit(); route();
     } else if (act === "oauth") { await oauthLink(b.dataset.k); b.disabled = false; }
     else if (act === "ext") { window.open(SOCIALS[b.dataset.k].login, "_blank", "noopener"); askHandle(b.dataset.k); }
     else if (act === "addhandle") askHandle(b.dataset.k);
