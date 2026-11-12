@@ -57,6 +57,7 @@ begin
     );
   end if;
   if c in ('forumPosts','forumComments') then return true; end if;
+  if c = 'fees' then return d->>'studentId' = auth.uid()::text; end if;
   if c = 'notes' then
     return d->>'teacherId' = auth.uid()::text or exists (
       select 1 from public.campushub_documents e
