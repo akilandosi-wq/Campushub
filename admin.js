@@ -2,7 +2,8 @@
 let me = null, profile = {};
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const isAdmin = () => profile.role === "admin";\nlet teachersCache = new Map();
+const isAdmin = () => profile.role === "admin";
+let teachersCache = new Map();\nlet teachersCache = new Map();
 const portalRole = document.body.dataset.portal || "admin";
 const view = h => { $("view").innerHTML = h; };
 const head = (t, p) => `<div class="page-head"><h1>${t}</h1><p>${p}</p></div>`;
@@ -44,13 +45,13 @@ const myWork = async () => (await (isAdmin() ? col("work") : col("work").where("
 function route() {
   if (!me) return;
   const [page = "dashboard", ...arg] = location.hash.replace(/^#\/?/, "").split("/");
-  const titles = { dashboard: "Dashboard", modules: "Modules", module: "Module", work: "Assignments & Tests", students: "My Students", users: "Manage Users" };
+  const titles = { dashboard: "Dashboard", modules: "Modules", module: "Module", work: "Assignments & Tests", students: "My Students", users: "Manage Users", results: "Results Management" };
   $("pageTitle").textContent = titles[page] || "Dashboard";
   document.querySelectorAll(".side-link[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === (page === "module" ? "modules" : page)));
   $("backBtn").style.visibility = page === "dashboard" ? "hidden" : "visible";
   $("sidebar").classList.remove("open"); window.scrollTo(0, 0);
   view('<div class="empty">Loading…</div>');
-  const pages = { dashboard: isAdmin() ? adminDashboard : dashboard, modules, module: modulePage, work: workAll, students, users };
+  const pages = { dashboard: isAdmin() ? adminDashboard : dashboard, modules, module: modulePage, work: workAll, students, users, results };
   (pages[page] || dashboard)(arg).catch(e => view(`<div class="panel empty">Could not load: ${esc(e.message)}</div>`));
 }
 
@@ -182,6 +183,46 @@ async function modules() {
   };
 }
 
+
+/* ----- assessment results ----- */
+async function results() {
+  const [mods, enr, snap] = await Promise.all([
+    myModules(), myEnr(), isAdmin() ? col("results").get() : col("results").where("teacherId", "==", me.uid).get()
+  ]);
+  const records = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const pending = records.filter(r => r.status === "submitted");
+  const approved = records.filter(r => r.status === "approved");
+  const returned = records.filter(r => r.status === "returned");
+  const statusTag = s => `<span class="tag ${s === "published" ? "green" : s === "returned" ? "gold" : ""}">${esc(s)}</span>`;
+  const resultRow = r => `<div class="list-item"><div><strong>${esc(r.studentName || r.regNo)} · ${esc(r.assessmentTitle)}</strong><small>${esc(r.moduleName)} · ${Number(r.score)} / ${Number(r.maxScore)} (${Number(r.percentage).toFixed(1)}%)</small><small>Teacher: ${esc(r.teacherName || "—")} · ${statusTag(r.status)}</small>${r.feedback ? `<small>Admin feedback: ${esc(r.feedback)}</small>` : ""}</div><div class="row-btns">${isAdmin() && r.status === "submitted" ? `<button class="btn btn-light btn-sm" data-act="approve-result" data-id="${r.id}">Approve</button><button class="btn btn-danger btn-sm" data-act="return-result" data-id="${r.id}">Return</button>` : ""}${isAdmin() && r.status === "approved" ? `<button class="btn btn-primary btn-sm" data-act="publish-result" data-id="${r.id}">Publish</button>` : ""}</div></div>`;
+  const moduleOptions = mods.map(m => `<option value="${esc(m.id)}" data-name="${esc(m.code + " — " + m.name)}">${esc(m.code)} — ${esc(m.name)}</option>`).join("");
+  const enrolledFor = moduleId => enr.filter(e => e.moduleId === moduleId);
+  const returnedRows = returned.map(r => `<div class="list-item"><div><strong>${esc(r.studentName)} · ${esc(r.assessmentTitle)}</strong><small>${esc(r.moduleName)} · Returned: ${esc(r.feedback || "Please review the mark.")}</small><div class="row-btns"><label>Score <input type="number" min="0" max="${Number(r.maxScore)}" step="0.01" id="rev-${r.id}" value="${Number(r.score)}" style="width:100px"></label><button class="btn btn-primary btn-sm" data-act="resubmit-result" data-id="${r.id}">Resubmit</button></div></div></div>`).join("");
+  view(head("Results Management", isAdmin() ? "Review submitted marks, approve them and publish verified results." : "Enter marks for students registered in your modules and submit them for approval.") +
+    (isAdmin() ? `<div class="stats">${stat("fa-hourglass-half", pending.length, "Awaiting review")}${stat("fa-circle-check", approved.length, "Approved")}${stat("fa-eye", records.filter(r => r.status === "published").length, "Published")}</div><div class="panel"><h3>Submitted for review</h3>${pending.map(resultRow).join("") || '<div class="empty">No results awaiting review.</div>'}</div><div class="panel"><h3>Approved — ready to publish</h3>${approved.map(resultRow).join("") || '<div class="empty">No approved results.</div>'}</div><div class="panel"><h3>Published results</h3>${records.filter(r => r.status === "published").map(resultRow).join("") || '<div class="empty">No published results.</div>'}</div>` :
+    `<div class="panel"><h3>Enter assessment results</h3>${mods.length ? `<form id="resultForm"><div class="form-grid"><div class="field"><label>Module</label><select id="resultModule" required>${moduleOptions}</select></div><div class="field"><label>Assessment title</label><input id="assessmentTitle" required placeholder="e.g. CAT 1"></div><div class="field"><label>Maximum score</label><input id="maxScore" type="number" min="1" step="0.01" value="100" required></div></div><div id="resultStudents" class="panel"><p class="subtle">Choose a module to load its registered students.</p></div><button class="btn btn-primary" type="submit">Submit marks for admin review</button></form>` : '<div class="empty">No modules assigned to you yet. Ask Admin to assign your modules first.</div>'}</div><div class="panel"><h3>Returned for correction</h3>${returnedRows || '<div class="empty">No returned results.</div>'}</div><div class="panel"><h3>Submission history</h3>${records.filter(r => r.status !== "returned").map(resultRow).join("") || '<div class="empty">No submissions yet.</div>'}</div>`));
+  if (!isAdmin() && $("resultForm")) {
+    const loadStudents = () => {
+      const id = $("resultModule").value, list = enrolledFor(id);
+      $("resultStudents").innerHTML = list.length ? `<h4>Registered students (${list.length})</h4>${list.map((e,i) => `<div class="list-item"><div><strong>${esc(e.studentName || "Student")}</strong><small>${esc(e.regNo || "")}</small></div><label>Score <input type="number" name="score_${esc(e.studentId)}" min="0" step="0.01" required style="width:110px"></label></div>`).join("")}` : '<div class="empty">No students are registered in this module.</div>';
+    };
+    $("resultModule").onchange = loadStudents; loadStudents();
+    $("resultForm").onsubmit = async e => {
+      e.preventDefault();
+      const moduleId = $("resultModule").value, mod = mods.find(m => m.id === moduleId);
+      const title = $("assessmentTitle").value.trim(), maxScore = Number($("maxScore").value);
+      const list = enrolledFor(moduleId);
+      if (!mod || !title || !(maxScore > 0) || !list.length) return toast("Check the assessment details and module registrations.", true);
+      const entries = list.map(student => ({ student, score: Number(e.target.elements["score_" + student.studentId].value) }));
+      if (entries.some(x => !Number.isFinite(x.score) || x.score < 0 || x.score > maxScore)) return toast("Each score must be between 0 and the maximum score.", true);
+      try {
+        for (const {student,score} of entries) await col("results").add({ moduleId, moduleName: mod.code + " — " + mod.name, teacherId: me.uid, teacherName: profile.fullName || "", studentId: student.studentId, studentName: student.studentName || "", regNo: student.regNo || "", assessmentTitle: title, score, maxScore, percentage: score / maxScore * 100, status: "submitted", feedback: "", submittedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        toast("Marks submitted to Admin for review."); route();
+      } catch (err) { fail(err); }
+    };
+  }
+}
+
 async function users() {
   if (!isAdmin()) return view('<div class="panel empty">Administrators only.</div>');
   const all = (await col("students").get()).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.fullName || "").localeCompare(b.fullName || ""));
@@ -235,6 +276,34 @@ document.addEventListener("click", async e => {
       ]);
       toast("Lecturer assigned. Existing module records were transferred.");
       route();
+    }
+    if (act === "approve-result" || act === "publish-result" || act === "return-result") {
+      if (!isAdmin()) throw new Error("Only Admin can review or publish results.");
+      const d = await col("results").doc(id).get();
+      if (!d.exists) throw new Error("Result record not found.");
+      const current = d.data();
+      if (act === "approve-result" && current.status !== "submitted") throw new Error("Only submitted results can be approved.");
+      if (act === "publish-result" && current.status !== "approved") throw new Error("Approve the result before publishing.");
+      let patch = { reviewedAt: firebase.firestore.FieldValue.serverTimestamp() };
+      if (act === "approve-result") patch.status = "approved";
+      if (act === "publish-result") { patch.status = "published"; patch.publishedAt = firebase.firestore.FieldValue.serverTimestamp(); }
+      if (act === "return-result") {
+        const feedback = prompt("Reason for returning this result to the teacher:");
+        if (!feedback || !feedback.trim()) return;
+        patch.status = "returned"; patch.feedback = feedback.trim();
+      }
+      await col("results").doc(id).update(patch);
+      toast(act === "publish-result" ? "Result published to the student." : act === "approve-result" ? "Result approved." : "Result returned to teacher.");
+      route();
+    }
+    if (act === "resubmit-result") {
+      if (isAdmin()) throw new Error("Only the teacher can resubmit returned marks.");
+      const d = await col("results").doc(id).get();
+      if (!d.exists || d.data().teacherId !== me.uid || d.data().status !== "returned") throw new Error("This result cannot be resubmitted.");
+      const current = d.data(), score = Number($("rev-" + id).value);
+      if (!Number.isFinite(score) || score < 0 || score > Number(current.maxScore)) throw new Error("Enter a valid score.");
+      await col("results").doc(id).update({ score, percentage: score / Number(current.maxScore) * 100, status: "submitted", feedback: "", submittedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      toast("Corrected result resubmitted."); route();
     }
     if (act === "downloadnote") {
       const url = await firebase.storage().ref(b.dataset.path).getDownloadURL();
