@@ -241,7 +241,7 @@ async function timetable() {
     e.preventDefault();
     const mod=mods.find(m=>m.id===$("ttModule").value), day=$("ttDay").value, startTime=$("ttStart").value, endTime=$("ttEnd").value, venue=$("ttVenue").value.trim();
     if(!mod||!startTime||!endTime||endTime<=startTime||!venue) return toast("Check the module, venue and lesson times. End time must be after start time.",true);
-    if(entries.some(x=>x.day===day&&x.startTime<endTime&&startTime<x.endTime)) return toast("This session overlaps another session in your timetable.",true);
+    if(entries.some(x=>x.teacherId===mod.teacherId&&x.day===day&&x.startTime<endTime&&startTime<x.endTime)) return toast("This session overlaps another session in your timetable.",true);
     const btn=form.querySelector('button[type="submit"]'); btn.disabled=true;
     try{
       await col("timetable").add({moduleId:mod.id,moduleName:mod.code+" — "+mod.name,teacherId:mod.teacherId,teacherName:mod.teacherName||profile.fullName||"Teacher",day,startTime,endTime,venue,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
@@ -410,9 +410,9 @@ document.addEventListener("click", async e => {
     if (act === "delwork") { if (!confirm("Delete this item?")) return; await col("work").doc(id).delete(); toast("Deleted."); route(); }
     if (act === "delmod") {
       if (!confirm("Delete this module with all its registrations and work?")) return;
-      const [a, w, n] = await Promise.all([col("moduleEnrollments").where("moduleId", "==", id).where("teacherId", "==", b.dataset.t).get(), col("work").where("moduleId", "==", id).get(), col("notes").where("moduleId", "==", id).get()]);
+      const [a, w, n, t] = await Promise.all([col("moduleEnrollments").where("moduleId", "==", id).where("teacherId", "==", b.dataset.t).get(), col("work").where("moduleId", "==", id).get(), col("notes").where("moduleId", "==", id).get(), col("timetable").where("moduleId", "==", id).get()]);
       await Promise.all(n.docs.map(d => firebase.storage().ref(d.data().storagePath).delete().catch(() => {})));
-      const batch = db.batch(); a.docs.concat(w.docs, n.docs).forEach(d => batch.delete(d.ref)); batch.delete(col("modules").doc(id)); await batch.commit();
+      const batch = db.batch(); a.docs.concat(w.docs, n.docs, t.docs).forEach(d => batch.delete(d.ref)); batch.delete(col("modules").doc(id)); await batch.commit();
       toast("Module deleted."); location.hash = "#/modules";
     }
   } catch (err) { fail(err); }
