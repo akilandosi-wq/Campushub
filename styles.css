@@ -241,3 +241,19 @@ button,a,.panel,.scard,.stat,.side-link{transition:all .18s ease}
 /* Keep page titles and supporting text grouped as a readable heading block. */
 .page-head{display:block;position:relative;padding-left:30px}
 .page-head:before{position:absolute;left:0;top:18px;bottom:18px;width:5px;margin:0;align-self:auto}
+
+/* Compact, more responsive workspace spacing */
+.page-head{padding:14px 16px;margin-bottom:14px}
+.panel{padding:15px;margin-bottom:14px}
+.panel h3{margin-bottom:10px}
+.status-grid,.stats{gap:12px}
+.list-item{padding:10px 0}
+@media(max-width:700px){
+  .main{padding:12px}
+  .page-head{padding:12px}
+  .panel{padding:12px}
+  .cols{grid-template-columns:1fr;gap:12px}
+  .stats,.status-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px}
+  .list-item{gap:10px;align-items:flex-start}
+  .row-btns{gap:6px}
+}
