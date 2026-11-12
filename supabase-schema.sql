@@ -37,9 +37,24 @@ begin
         and e.data->>'studentId' = auth.uid()::text
     );
   end if;
+  if c = 'timetable' then
+    return d->>'teacherId' = auth.uid()::text and exists (
+      select 1 from public.campushub_documents m
+      where m.collection_name = 'modules' and m.id = d->>'moduleId'
+        and m.data->>'teacherId' = auth.uid()::text
+    );
+  end if;
   if c = 'results' then
     return d->>'teacherId' = auth.uid()::text
       or (d->>'studentId' = auth.uid()::text and d->>'status' = 'published');
+  end if;
+  if c = 'timetable' then
+    return d->>'teacherId' = auth.uid()::text or exists (
+      select 1 from public.campushub_documents e
+      where e.collection_name = 'moduleEnrollments'
+        and e.data->>'moduleId' = d->>'moduleId'
+        and e.data->>'studentId' = auth.uid()::text
+    );
   end if;
   if c = 'notes' then
     return d->>'teacherId' = auth.uid()::text or exists (
