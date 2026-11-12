@@ -185,6 +185,51 @@ async function modules() {
 
 
 /* ----- assessment results ----- */
+/* ----- module workspace, notes and student list ----- */
+async function modulePage([moduleId]) {
+  if (!moduleId) {
+    const mods = await myModules();
+    return view(head("Module workspace", "Choose one of your assigned modules.") +
+      `<div class="panel">${mods.map(m => `<div class="list-item"><div><strong>${esc(m.code)} — ${esc(m.name)}</strong><small>${esc(m.teacherName || "")}</small></div><a class="btn btn-light btn-sm" href="#/module/${esc(m.id)}">Open</a></div>`).join("") || '<div class="empty">No modules assigned yet.</div>'}</div>`);
+  }
+  const [moduleSnap, notesSnap, enrollmentSnap] = await Promise.all([
+    col("modules").doc(moduleId).get(),
+    col("notes").where("moduleId", "==", moduleId).get(),
+    col("moduleEnrollments").where("moduleId", "==", moduleId).get()
+  ]);
+  if (!moduleSnap.exists) throw new Error("Module not found.");
+  const mod = moduleSnap.data();
+  if (!isAdmin() && mod.teacherId !== me.uid) throw new Error("This module is not assigned to your account.");
+  const notes = notesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const enrollments = enrollmentSnap.docs.map(d => d.data());
+  view(head(esc(mod.code) + " — " + esc(mod.name), "Module workspace: learning materials and registered students.") +
+    `<div class="panel"><h3>Module information</h3><p>${esc(mod.description || "No description added.")}</p><small>Lecturer: ${esc(mod.teacherName || profile.fullName || "—")}</small>${safeUrl(mod.resource) ? `<p><a href="${safeUrl(mod.resource)}" target="_blank" rel="noopener">Open learning resource</a></p>` : ""}</div>
+    <div class="panel"><h3><i class="fa-solid fa-file-pdf"></i> Upload notes</h3><p class="subtle">Upload PDF learning materials for students registered in this module. Maximum file size: 20 MB.</p>
+      <form id="notesForm"><input type="hidden" id="notesModuleName" value="${esc(mod.code + " — " + mod.name)}"><div class="form-grid">
+        <div class="field"><label>Notes title</label><input id="notesTitle" required placeholder="e.g. Chapter 1 — Introduction"></div>
+        <div class="field"><label>PDF file</label><input id="notesFile" type="file" accept="application/pdf,.pdf" required></div>
+      </div><button class="btn btn-primary" type="submit"><i class="fa-solid fa-upload"></i> Upload notes</button></form>
+    </div>
+    <div class="panel"><h3>Learning materials</h3>${notes.map(noteRow).join("") || '<div class="empty">No notes uploaded for this module yet.</div>'}</div>
+    <div class="panel"><h3>Registered students (${enrollments.length})</h3>${enrollments.map(e => `<div class="list-item"><div><strong>${esc(e.studentName || "Student")}</strong><small>${esc(e.regNo || "")}</small></div></div>`).join("") || '<div class="empty">No students registered yet.</div>'}</div>`);
+  bindNotesForm(moduleId);
+}
+async function workAll() {
+  const [mods, work] = await Promise.all([myModules(), myWork()]);
+  view(head("Assignments & Tests", "Create assignments and tests for students registered in your modules.") +
+    `<div class="panel"><h3>Create assignment or test</h3>${mods.length ? workForm(mods) : '<div class="empty">Create or get assigned a module before publishing work.</div>'}</div>
+    <div class="panel"><h3>Published work</h3>${work.map(w => workRow(w)).join("") || '<div class="empty">No assignments or tests published yet.</div>'}</div>`);
+  if (mods.length) bindWorkForm();
+}
+async function students() {
+  const enrollments = await myEnr();
+  const unique = new Map();
+  enrollments.forEach(e => unique.set(e.studentId, e));
+  const rows = [...unique.values()];
+  view(head(isAdmin() ? "All Students" : "My Students", "Students registered in your modules.") +
+    `<div class="panel"><h3>Student directory (${rows.length})</h3>${rows.map(e => `<div class="list-item"><div><strong>${esc(e.studentName || "Student")}</strong><small>${esc(e.regNo || "")} · ${esc(e.moduleName || "")}</small></div></div>`).join("") || '<div class="empty">No student registrations found.</div>'}</div>`);
+}
+
 async function results() {
   const [mods, enr, snap] = await Promise.all([
     myModules(), myEnr(), isAdmin() ? col("results").get() : col("results").where("teacherId", "==", me.uid).get()
