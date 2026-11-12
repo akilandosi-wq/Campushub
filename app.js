@@ -112,13 +112,13 @@ function route() {
     const portal = profile.role === "admin" ? "admin.html" : "teacher.html";
     return location.replace(portal + "#/" + (page === "home" ? "dashboard" : page));
   }
-  const titles = { home: "Home", modules: "Modules", work: "Assignments & Tests", results: "My Results", timetable: "My Timetable", progress: "Academic Progress", chat: "Chat", profile: "My Profile", student: "Student profile" };
+  const titles = { home: "Home", modules: "Modules", work: "Assignments & Tests", results: "My Results", timetable: "My Timetable", progress: "Academic Progress", forum: "Student Forum", chat: "Chat", profile: "My Profile", student: "Student profile" };
   $("pageTitle").textContent = titles[page] || "Overview";
   document.querySelectorAll(".side-link[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
   $("backBtn").style.visibility = page === "home" ? "hidden" : "visible";
   $("sidebar").classList.remove("open"); window.scrollTo(0, 0);
   view('<div class="empty">Loading…</div>');
-  const pages = { home: homePage, modules: modulesPage, work: workPage, results: resultsPage, timetable: timetablePage, progress: progressPage, chat: chatPage, profile: profilePage, student: studentPage };
+  const pages = { home: homePage, modules: modulesPage, work: workPage, results: resultsPage, timetable: timetablePage, progress: progressPage, forum: forumPage, chat: chatPage, profile: profilePage, student: studentPage };
   return (pages[page] || homePage)(arg).catch(err => view(`<div class="panel empty">Could not load: ${esc(friendly(err))}</div>`));
 }
 
@@ -313,6 +313,27 @@ async function progressPage() {
   view(head("Academic Progress","A summary of assessment results that have been officially published to your account.")+
     (rows.length?`<div class="stats"><div class="stat"><div class="stat-icon"><i class="fa-solid fa-chart-line"></i></div><div><strong>${average.toFixed(1)}%</strong><span>Overall average</span></div></div><div class="stat"><div class="stat-icon"><i class="fa-solid fa-clipboard-check"></i></div><div><strong>${rows.length}</strong><span>Published assessments</span></div></div><div class="stat"><div class="stat-icon"><i class="fa-solid fa-book-open"></i></div><div><strong>${modules.length}</strong><span>Modules with results</span></div></div></div>
     <div class="panel"><h3>Progress by module</h3>${modules.map(m=>`<div class="progress-item"><div class="row-btns" style="justify-content:space-between"><strong>${esc(m.name)}</strong><b>${m.average.toFixed(1)}%</b></div><div class="progress-track"><span style="width:${bar(m.average)}%"></span></div><small>${m.count} published assessment(s) · Latest: ${esc(m.latest.title)} (${m.latest.percentage.toFixed(1)}%)</small></div>`).join("")}</div>`:'<div class="panel empty">Your academic progress will appear here after results are published by your lecturers and approved by the administrator.</div>'));
+}
+
+/* ---------- STUDENT FORUM ---------- */
+async function forumPage([postId]) {
+  const fmtDate=value=>{const d=new Date(value||0);return Number.isNaN(d.getTime())?"":d.toLocaleString();};
+  if(postId){
+    const postDoc=await db.collection("forumPosts").doc(postId).get();
+    if(!postDoc.exists) return view(head("Student Forum","Discussion not found.")+'<div class="panel empty">This discussion may have been removed.</div>');
+    const post=postDoc.data();
+    const comments=(await db.collection("forumComments").where("postId","==",postId).get()).docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+    view(head("Forum discussion",esc(post.title))+`<div class="panel"><div class="row-btns" style="justify-content:space-between"><span class="tag">${esc(post.category||"General")}</span><small>${esc(post.authorName||"Student")} · ${esc(fmtDate(post.createdAt))}</small></div><p style="white-space:pre-wrap">${esc(post.body)}</p><a class="btn btn-light btn-sm" href="#/forum">Back to forum</a></div>
+      <div class="panel"><h3>Comments (${comments.length})</h3>${comments.map(x=>`<div class="list-item"><div><strong>${esc(x.authorName||"Student")}</strong><small>${esc(fmtDate(x.createdAt))}</small><p style="white-space:pre-wrap">${esc(x.body)}</p></div>${x.authorId===me.uid?`<button class="btn btn-danger btn-sm" data-act="delete-forum-comment" data-id="${esc(x.id)}">Delete</button>`:""}</div>`).join("")||'<div class="empty">Be the first to comment.</div>'}
+      <form id="forumCommentForm"><div class="field"><label>Add a comment</label><textarea id="forumCommentBody" required rows="3" placeholder="Write a helpful reply…"></textarea></div><button class="btn btn-primary" type="submit">Post comment</button></form></div>`);
+    $("forumCommentForm").onsubmit=async e=>{e.preventDefault();const body=$("forumCommentBody").value.trim();if(!body)return;const btn=e.target.querySelector("button");btn.disabled=true;try{await db.collection("forumComments").add({postId,body,authorId:me.uid,authorName:profile.fullName||"Student",createdAt:firebase.firestore.FieldValue.serverTimestamp()});route();}catch(err){toast(friendly(err),true);btn.disabled=false;}};
+    return;
+  }
+  const posts=(await db.collection("forumPosts").get()).docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  view(head("Student Forum","Ask questions, share useful ideas and discuss academic topics with the campus community.")+`
+    <div class="panel"><h3>Start a discussion</h3><form id="forumPostForm"><div class="form-grid"><div class="field"><label>Discussion title</label><input id="forumTitle" required maxlength="120" placeholder="What would you like to discuss?"></div><div class="field"><label>Category</label><select id="forumCategory"><option>General</option><option>Computer Engineering</option><option>Electronics</option><option>Networking</option><option>Academic Support</option><option>Campus Life</option></select></div><div class="field full"><label>Message</label><textarea id="forumBody" required rows="4" maxlength="5000" placeholder="Explain your question or idea…"></textarea></div></div><button class="btn btn-primary" type="submit">Publish discussion</button></form></div>
+    <div class="panel"><h3>Recent discussions (${posts.length})</h3>${posts.map(p=>`<div class="list-item"><div><a href="#/forum/${encodeURIComponent(p.id)}"><strong>${esc(p.title)}</strong></a><small>${esc(p.category||"General")} · ${esc(p.authorName||"Student")} · ${esc(fmtDate(p.createdAt))}</small><p>${esc((p.body||"").slice(0,180))}${(p.body||"").length>180?"…":""}</p></div>${p.authorId===me.uid?`<button class="btn btn-danger btn-sm" data-act="delete-forum-post" data-id="${esc(p.id)}">Delete</button>`:""}</div>`).join("")||'<div class="empty">No discussions yet. Start the first one.</div>'}</div>`);
+  $("forumPostForm").onsubmit=async e=>{e.preventDefault();const title=$("forumTitle").value.trim(),body=$("forumBody").value.trim();if(!title||!body)return;const btn=e.target.querySelector("button");btn.disabled=true;try{await db.collection("forumPosts").add({title,body,category:$("forumCategory").value,authorId:me.uid,authorName:profile.fullName||"Student",createdAt:firebase.firestore.FieldValue.serverTimestamp()});toast("Discussion published.");route();}catch(err){toast(friendly(err),true);btn.disabled=false;}};
 }
 
 /* ---------- CHAT ---------- */
