@@ -257,3 +257,10 @@ button,a,.panel,.scard,.stat,.side-link{transition:all .18s ease}
   .list-item{gap:10px;align-items:flex-start}
   .row-btns{gap:6px}
 }
+
+/* Academic progress indicators */
+.progress-item{padding:12px 0;border-bottom:1px solid var(--line)}
+.progress-item:last-child{border-bottom:0}
+.progress-item small{display:block;color:var(--muted);margin-top:6px}
+.progress-track{height:8px;background:#e8eef2;border-radius:20px;overflow:hidden;margin-top:8px}
+.progress-track span{display:block;height:100%;background:var(--teal);border-radius:20px}
