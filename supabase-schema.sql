@@ -172,6 +172,22 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values ('campushub-notes','campushub-notes',false,20971520,array['application/pdf'])
 on conflict (id) do update set public=false, file_size_limit=20971520, allowed_mime_types=array['application/pdf'];
 
+-- Storage policies use a SECURITY DEFINER helper to avoid nested RLS blocking module ownership checks.
+create or replace function public.campushub_can_upload_notes(module_id text)
+returns boolean language sql stable security definer set search_path = public
+as $
+  select auth.uid() is not null
+    and (
+      public.campushub_role() = 'admin'
+      or exists (
+        select 1 from public.campushub_documents m
+        where m.collection_name = 'modules'
+          and m.id = module_id
+          and m.data->>'teacherId' = auth.uid()::text
+      )
+    );
+$;
+
 drop policy if exists "CampusHub notes read" on storage.objects;
 drop policy if exists "CampusHub notes upload" on storage.objects;
 drop policy if exists "CampusHub notes delete" on storage.objects;
@@ -191,7 +207,7 @@ using (bucket_id = 'campushub-notes' and (
   )
 ));
 create policy "CampusHub notes upload" on storage.objects for insert to authenticated
-with check (bucket_id = 'campushub-notes' and (storage.foldername(name))[1] = 'moduleNotes' and (public.campushub_role() = 'admin' or exists (select 1 from public.campushub_documents m where m.collection_name = 'modules' and m.id = (storage.foldername(name))[2] and m.data->>'teacherId' = auth.uid()::text)));
+with check (bucket_id = 'campushub-notes' and (storage.foldername(name))[1] = 'moduleNotes' and public.campushub_can_upload_notes((storage.foldername(name))[2]));
 create policy "CampusHub notes delete" on storage.objects for delete to authenticated
 using (bucket_id = 'campushub-notes' and (
   public.campushub_role() = 'admin'
