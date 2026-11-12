@@ -112,9 +112,10 @@ begin
   end if;
   if c = 'forumPosts' then return d->>'authorId' = auth.uid()::text; end if;
   if c = 'forumComments' then
-    return d->>'authorId' = auth.uid()::text and exists (
+    return exists (
       select 1 from public.campushub_documents p
       where p.collection_name = 'forumPosts' and p.id = d->>'postId'
+        and (d->>'authorId' = auth.uid()::text or p.data->>'authorId' = auth.uid()::text)
     );
   end if;
   if c = 'work' or c = 'notes' then return d->>'teacherId' = auth.uid()::text and exists (select 1 from public.campushub_documents m where m.collection_name = 'modules' and m.id = d->>'moduleId' and m.data->>'teacherId' = auth.uid()::text); end if;
