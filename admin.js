@@ -45,13 +45,13 @@ const myWork = async () => (await (isAdmin() ? col("work") : col("work").where("
 function route() {
   if (!me) return;
   const [page = "dashboard", ...arg] = location.hash.replace(/^#\/?/, "").split("/");
-  const titles = { dashboard: "Dashboard", modules: "Modules", module: "Module", work: "Assignments & Tests", students: "My Students", users: "Manage Users", results: "Results Management" };
+  const titles = { dashboard: "Dashboard", modules: "Modules", module: "Module", work: "Assignments & Tests", students: "My Students", users: "Manage Users", results: "Results Management", timetable: "Timetable" };
   $("pageTitle").textContent = titles[page] || "Dashboard";
   document.querySelectorAll(".side-link[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === (page === "module" ? "modules" : page)));
   $("backBtn").style.visibility = page === "dashboard" ? "hidden" : "visible";
   $("sidebar").classList.remove("open"); window.scrollTo(0, 0);
   view('<div class="empty">Loading…</div>');
-  const pages = { dashboard: isAdmin() ? adminDashboard : dashboard, modules, module: modulePage, work: workAll, students, users, results };
+  const pages = { dashboard: isAdmin() ? adminDashboard : dashboard, modules, module: modulePage, work: workAll, students, users, results, timetable };
   (pages[page] || dashboard)(arg).catch(e => view(`<div class="panel empty">Could not load: ${esc(e.message)}</div>`));
 }
 
@@ -221,6 +221,34 @@ async function workAll() {
     <div class="panel"><h3>Published work</h3>${work.map(w => workRow(w)).join("") || '<div class="empty">No assignments or tests published yet.</div>'}</div>`);
   if (mods.length) bindWorkForm();
 }
+/* ----- class timetable ----- */
+async function timetable() {
+  const [mods, snap] = await Promise.all([myModules(), isAdmin() ? col("timetable").get() : col("timetable").where("teacherId", "==", me.uid).get()]);
+  const days = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+  const entries = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => days.indexOf(a.day)-days.indexOf(b.day) || String(a.startTime).localeCompare(String(b.startTime)));
+  const options = mods.map(m => `<option value="${esc(m.id)}">${esc(m.code)} — ${esc(m.name)}</option>`).join("");
+  view(head("Class Timetable", "Schedule lessons for your modules. Students see sessions for modules they have registered for.") +
+    (mods.length ? `<div class="panel"><h3>Add a class session</h3><form id="timetableForm"><div class="form-grid">
+      <div class="field"><label>Module</label><select id="ttModule" required>${options}</select></div>
+      <div class="field"><label>Day</label><select id="ttDay" required>${days.map(d=>`<option>${d}</option>`).join("")}</select></div>
+      <div class="field"><label>Start time</label><input id="ttStart" type="time" required></div>
+      <div class="field"><label>End time</label><input id="ttEnd" type="time" required></div>
+      <div class="field full"><label>Room / venue</label><input id="ttVenue" required placeholder="e.g. Lab 2 or Room B12"></div>
+    </div><button class="btn btn-primary" type="submit">Save timetable session</button></form></div>` : '<div class="panel empty">No modules are assigned to your account yet.</div>') +
+    `<div class="panel"><h3>Scheduled sessions</h3>${entries.length ? entries.map(x=>`<div class="list-item"><div><strong>${esc(x.day)} · ${esc(x.startTime)}–${esc(x.endTime)}</strong><small>${esc(x.moduleName)} · ${esc(x.venue||"Venue not set")}</small><small>Lecturer: ${esc(x.teacherName||"—")}</small></div><button class="btn btn-danger btn-sm" data-act="deltimetable" data-id="${esc(x.id)}">Remove</button></div>`).join("") : '<div class="empty">No sessions have been scheduled yet.</div>'}</div>`);
+  const form=$("timetableForm");
+  if(form) form.onsubmit=async e=>{
+    e.preventDefault();
+    const mod=mods.find(m=>m.id===$("ttModule").value), day=$("ttDay").value, startTime=$("ttStart").value, endTime=$("ttEnd").value, venue=$("ttVenue").value.trim();
+    if(!mod||!startTime||!endTime||endTime<=startTime||!venue) return toast("Check the module, venue and lesson times. End time must be after start time.",true);
+    if(entries.some(x=>x.day===day&&x.startTime<endTime&&startTime<x.endTime)) return toast("This session overlaps another session in your timetable.",true);
+    const btn=form.querySelector('button[type="submit"]'); btn.disabled=true;
+    try{
+      await col("timetable").add({moduleId:mod.id,moduleName:mod.code+" — "+mod.name,teacherId:mod.teacherId,teacherName:mod.teacherName||profile.fullName||"Teacher",day,startTime,endTime,venue,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+      toast("Timetable session saved."); route();
+    }catch(err){fail(err);btn.disabled=false;}
+  };
+}
 async function students() {
   const enrollments = await myEnr();
   const unique = new Map();
@@ -325,15 +353,17 @@ document.addEventListener("click", async e => {
       const moduleDoc = await col("modules").doc(id).get();
       if (!moduleDoc.exists) throw new Error("Module not found.");
       await col("modules").doc(id).update({ teacherId: teacher.id, teacherName: teacher.fullName || teacher.email || "Teacher" });
-      const [enrollments, workItems, notesItems] = await Promise.all([
+      const [enrollments, workItems, notesItems, timetableItems] = await Promise.all([
         col("moduleEnrollments").where("moduleId", "==", id).get(),
         col("work").where("moduleId", "==", id).get(),
-        col("notes").where("moduleId", "==", id).get()
+        col("notes").where("moduleId", "==", id).get(),
+        col("timetable").where("moduleId", "==", id).get()
       ]);
       await Promise.all([
         ...enrollments.docs.map(d => col("moduleEnrollments").doc(d.id).update({ teacherId: teacher.id })),
         ...workItems.docs.map(d => col("work").doc(d.id).update({ teacherId: teacher.id })),
-        ...notesItems.docs.map(d => col("notes").doc(d.id).update({ teacherId: teacher.id }))
+        ...notesItems.docs.map(d => col("notes").doc(d.id).update({ teacherId: teacher.id })),
+        ...timetableItems.docs.map(d => col("timetable").doc(d.id).update({ teacherId: teacher.id, teacherName: teacher.fullName || teacher.email || "Teacher" }))
       ]);
       toast("Lecturer assigned. Existing module records were transferred.");
       route();
@@ -376,6 +406,7 @@ document.addEventListener("click", async e => {
       await col("notes").doc(id).delete();
       toast("Notes deleted."); route();
     }
+    if (act === "deltimetable") { if (!confirm("Remove this timetable session?")) return; await col("timetable").doc(id).delete(); toast("Timetable session removed."); route(); }
     if (act === "delwork") { if (!confirm("Delete this item?")) return; await col("work").doc(id).delete(); toast("Deleted."); route(); }
     if (act === "delmod") {
       if (!confirm("Delete this module with all its registrations and work?")) return;
