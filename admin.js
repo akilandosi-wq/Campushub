@@ -45,13 +45,13 @@ const myWork = async () => (await (isAdmin() ? col("work") : col("work").where("
 function route() {
   if (!me) return;
   const [page = "dashboard", ...arg] = location.hash.replace(/^#\/?/, "").split("/");
-  const titles = { dashboard: "Dashboard", modules: "Modules", module: "Module", work: "Assignments & Tests", students: "My Students", users: "Manage Users", results: "Results Management", timetable: "Timetable", fees: "Fee Management" };
+  const titles = { dashboard: "Dashboard", modules: "Modules", module: "Module", work: "Assignments & Tests", students: "My Students", users: "Manage Users", results: "Results Management", timetable: "Timetable", fees: "Fee Management", reports: "Academic Reports" };
   $("pageTitle").textContent = titles[page] || "Dashboard";
   document.querySelectorAll(".side-link[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === (page === "module" ? "modules" : page)));
   $("backBtn").style.visibility = page === "dashboard" ? "hidden" : "visible";
   $("sidebar").classList.remove("open"); window.scrollTo(0, 0);
   view('<div class="empty">Loading…</div>');
-  const pages = { dashboard: isAdmin() ? adminDashboard : dashboard, modules, module: modulePage, work: workAll, students, users, results, timetable, fees };
+  const pages = { dashboard: isAdmin() ? adminDashboard : dashboard, modules, module: modulePage, work: workAll, students, users, results, timetable, fees, reports };
   (pages[page] || dashboard)(arg).catch(e => view(`<div class="panel empty">Could not load: ${esc(e.message)}</div>`));
 }
 
@@ -313,6 +313,23 @@ async function results() {
 }
 
 /* ----- fee statement management (admin) ----- */
+/* ----- academic reports (admin) ----- */
+async function reports() {
+  if(!isAdmin()) return view('<div class="panel empty">Administrators only.</div>');
+  const [studentsSnap,modulesSnap,enrollmentsSnap,resultsSnap,feesSnap]=await Promise.all([col("students").get(),col("modules").get(),col("moduleEnrollments").get(),col("results").get(),col("fees").get()]);
+  const students=studentsSnap.docs.map(d=>d.data()).filter(x=>x.role==="student");
+  const modules=modulesSnap.docs.map(d=>({id:d.id,...d.data()}));
+  const results=resultsSnap.docs.map(d=>d.data()).filter(x=>x.status==="published");
+  const fees=feesSnap.docs.map(d=>d.data());
+  const pending=fees.filter(x=>x.status!=="paid").reduce((sum,x)=>sum+Number(x.amount||0),0);
+  const grouped=new Map();
+  results.forEach(r=>{const item=grouped.get(r.moduleId)||{name:r.moduleName||"Module",count:0,total:0};item.count++;item.total+=Number(r.percentage||0);grouped.set(r.moduleId,item);});
+  const rows=[...grouped.values()].sort((x,y)=>x.name.localeCompare(y.name));
+  view(head("Academic Reports","A live summary of registered students, modules, enrolments and published assessment results.")+
+    `<div class="stats admin-stats">${stat("fa-user-graduate",students.length,"Registered students")}${stat("fa-book-open",modules.length,"Academic modules")}${stat("fa-users",enrollmentsSnap.size,"Module enrolments")}${stat("fa-clipboard-check",results.length,"Published assessments")}</div>
+    <div class="cols"><div class="panel"><h3>Assessment performance by module</h3><div class="table-wrap"><table class="tbl"><thead><tr><th>Module</th><th>Assessments</th><th>Average</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.name)}</td><td>${x.count}</td><td>${(x.total/x.count).toFixed(1)}%</td></tr>`).join("")||'<tr><td colspan="3">No published results available.</td></tr>'}</tbody></table></div></div>
+    <div class="panel"><h3>Fee summary</h3><div class="admin-metric"><span>Fee statements</span><b>${fees.length}</b></div><div class="admin-metric"><span>Verified paid</span><b>${fees.filter(x=>x.status==="paid").length}</b></div><div class="admin-metric"><span>Outstanding recorded fees</span><b>${pending.toLocaleString()} TZS</b></div><small class="subtle">This reflects statements recorded in CampusHub, not a live payment gateway balance.</small></div></div>`);
+}
 async function fees() {
   if(!isAdmin()) return view('<div class="panel empty">Administrators only.</div>');
   const [studentsSnap,feeSnap]=await Promise.all([col("students").get(),col("fees").get()]);
